@@ -39,6 +39,22 @@ Our municipality registry already contains deterministic IPA links for all curre
 7,894 ISTAT municipalities, so no name-based matching is needed for normal
 collection.
 
+### Important: `ipaCode` is not a guaranteed exact server-side filter
+
+Empirical validation on 20 September 2026 showed that the public endpoint may
+return **prefix matches** for short IPA codes. A request for a code such as
+`c_b9` can therefore include records whose returned
+`administrationIpaCode` starts with that value.
+
+Consequences:
+
+- per-IPA lookup must re-check `administrationIpaCode` locally and retain only
+  exact case-insensitive matches;
+- the national catalogue method is safer because it joins each returned record
+  to the municipality registry using the record's complete IPA code;
+- a server-side filtered response must never be assumed to be entity-pure.
+
+
 ## PIAO publications
 
 The catalogue queries publications as:
