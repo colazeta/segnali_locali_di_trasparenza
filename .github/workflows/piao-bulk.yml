@@ -46,7 +46,8 @@ jobs:
             --registry data/processed/municipalities.csv \
             --output-dir data/piao-bulk \
             --target-start-year 2026 \
-            --delay 0.10 \
+            --delay 0.20 \
+            --workers 4 \
             --timeout 20 \
             --retries 2
 
