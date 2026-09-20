@@ -2,56 +2,90 @@ from __future__ import annotations
 
 import pandas as pd
 
-from segnali_locali_di_trasparenza.registry import link_ipa, normalise_name, validate_registry
+from segnali_locali_di_trasparenza.registry import (
+    link_ipa,
+    name_aliases,
+    normalise_name,
+    validate_registry,
+)
 
 
-def test_normalise_name_removes_comune_prefix() -> None:
+def _istat_row(
+    *,
+    code: str,
+    name: str,
+    cadastral: str,
+    name_full: str = "",
+    name_other: str = "",
+) -> dict[str, str]:
+    return {
+        "municipality_version_id": f"IT-ISTAT-{code}",
+        "istat_code": code,
+        "name": name,
+        "name_full": name_full,
+        "name_other": name_other,
+        "region_code": "00",
+        "region_name": "Test",
+        "supra_code": code[:3],
+        "supra_name": "Test",
+        "province_abbr": "TT",
+        "cadastral_code": cadastral,
+        "name_normalised": normalise_name(name),
+    }
+
+
+def _ipa_row(
+    *,
+    ipa_code: str,
+    name: str,
+    code: str,
+    cadastral: str,
+) -> dict[str, str | bool]:
+    return {
+        "ipa_code": ipa_code,
+        "ipa_name": name,
+        "fiscal_code": "",
+        "ipa_category": "L6",
+        "seat_istat_code": code,
+        "seat_cadastral_code": cadastral,
+        "institutional_url": "",
+        "updated_at_ipa": "",
+        "ipa_name_normalised": normalise_name(name),
+        "looks_like_municipality": bool(
+            name.lower().startswith(("comune", "gemeinde", "comun", "municipio"))
+        ),
+    }
+
+
+def test_normalise_name_removes_multilingual_municipal_prefixes() -> None:
     assert normalise_name("Comune di Lamezia Terme") == "lamezia terme"
-    assert normalise_name("COMUNE DI  Milano") == "milano"
+    assert normalise_name("Gemeinde Kuens") == "kuens"
+    assert normalise_name("Comun de Sèn Jan") == "sen jan"
+
+
+def test_name_aliases_splits_multilingual_official_names() -> None:
+    aliases = name_aliases("Caines/Kuens", "Caines", "Kuens")
+    assert aliases == {"caines", "kuens", "caines kuens"}
 
 
 def test_link_ipa_prefers_exact_municipality_name() -> None:
     istat = pd.DataFrame(
-        [
-            {
-                "municipality_version_id": "IT-ISTAT-079160",
-                "istat_code": "079160",
-                "name": "Lamezia Terme",
-                "region_code": "18",
-                "region_name": "Calabria",
-                "supra_code": "079",
-                "supra_name": "Catanzaro",
-                "province_abbr": "CZ",
-                "cadastral_code": "M208",
-                "name_normalised": "lamezia terme",
-            }
-        ]
+        [_istat_row(code="079160", name="Lamezia Terme", cadastral="M208")]
     )
-
     ipa = pd.DataFrame(
         [
-            {
-                "ipa_code": "c_m208",
-                "ipa_name": "Comune di Lamezia Terme",
-                "fiscal_code": "00301390795",
-                "ipa_category": "L6",
-                "seat_istat_code": "079160",
-                "seat_cadastral_code": "M208",
-                "institutional_url": "https://www.comune.lamezia-terme.cz.it/",
-                "updated_at_ipa": "2026-09-20",
-                "ipa_name_normalised": "lamezia terme",
-            },
-            {
-                "ipa_code": "consorzio_test",
-                "ipa_name": "Consorzio dei Comuni del Test",
-                "fiscal_code": "",
-                "ipa_category": "L6",
-                "seat_istat_code": "079160",
-                "seat_cadastral_code": "M208",
-                "institutional_url": "",
-                "updated_at_ipa": "",
-                "ipa_name_normalised": "consorzio dei comuni del test",
-            },
+            _ipa_row(
+                ipa_code="c_m208",
+                name="Comune di Lamezia Terme",
+                code="079160",
+                cadastral="M208",
+            ),
+            _ipa_row(
+                ipa_code="consorzio_test",
+                name="Consorzio dei Comuni del Test",
+                code="079160",
+                cadastral="M208",
+            ),
         ]
     )
 
@@ -62,48 +96,85 @@ def test_link_ipa_prefers_exact_municipality_name() -> None:
     assert result.loc[0, "ipa_candidate_count"] == 2
 
 
-def test_link_ipa_keeps_ambiguous_candidates_unresolved() -> None:
+def test_link_ipa_uses_official_other_language_name() -> None:
     istat = pd.DataFrame(
         [
-            {
-                "municipality_version_id": "IT-ISTAT-001001",
-                "istat_code": "001001",
-                "name": "Comune Test",
-                "region_code": "01",
-                "region_name": "Piemonte",
-                "supra_code": "001",
-                "supra_name": "Torino",
-                "province_abbr": "TO",
-                "cadastral_code": "A001",
-                "name_normalised": "test",
-            }
+            _istat_row(
+                code="021014",
+                name="Caines",
+                name_full="Caines/Kuens",
+                name_other="Kuens",
+                cadastral="B364",
+            )
+        ]
+    )
+    ipa = pd.DataFrame(
+        [
+            _ipa_row(
+                ipa_code="kuens",
+                name="Gemeinde Kuens",
+                code="",
+                cadastral="",
+            )
         ]
     )
 
+    result = link_ipa(istat, ipa)
+
+    assert result.loc[0, "ipa_code"] == "kuens"
+    assert result.loc[0, "ipa_match_status"] == "matched_global_exact"
+    assert result.loc[0, "ipa_match_basis"] == "unique_official_name_global"
+
+
+def test_link_ipa_accepts_curated_legal_entity_alias() -> None:
+    istat = pd.DataFrame(
+        [_istat_row(code="058091", name="Roma", cadastral="H501")]
+    )
     ipa = pd.DataFrame(
         [
-            {
-                "ipa_code": "a",
-                "ipa_name": "Comune Test A",
-                "fiscal_code": "",
-                "ipa_category": "L6",
-                "seat_istat_code": "001001",
-                "seat_cadastral_code": "A001",
-                "institutional_url": "",
-                "updated_at_ipa": "",
-                "ipa_name_normalised": "test a",
-            },
-            {
-                "ipa_code": "b",
-                "ipa_name": "Comune Test B",
-                "fiscal_code": "",
-                "ipa_category": "L6",
-                "seat_istat_code": "001001",
-                "seat_cadastral_code": "A001",
-                "institutional_url": "",
-                "updated_at_ipa": "",
-                "ipa_name_normalised": "test b",
-            },
+            _ipa_row(
+                ipa_code="c_h501",
+                name="Roma Capitale",
+                code="058091",
+                cadastral="H501",
+            ),
+            _ipa_row(
+                ipa_code="other",
+                name="Consorzio dei Comuni Romani",
+                code="058091",
+                cadastral="H501",
+            ),
+        ]
+    )
+
+    result = link_ipa(
+        istat,
+        ipa,
+        curated_aliases={"058091": ["Roma Capitale"]},
+    )
+
+    assert result.loc[0, "ipa_code"] == "c_h501"
+    assert result.loc[0, "ipa_match_status"] == "matched_exact"
+
+
+def test_link_ipa_keeps_ambiguous_candidates_unresolved() -> None:
+    istat = pd.DataFrame(
+        [_istat_row(code="001001", name="Comune Test", cadastral="A001")]
+    )
+    ipa = pd.DataFrame(
+        [
+            _ipa_row(
+                ipa_code="a",
+                name="Comune Test A",
+                code="001001",
+                cadastral="A001",
+            ),
+            _ipa_row(
+                ipa_code="b",
+                name="Comune Test B",
+                code="001001",
+                cadastral="A001",
+            ),
         ]
     )
 
