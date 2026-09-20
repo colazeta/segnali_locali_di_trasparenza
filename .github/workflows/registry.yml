@@ -116,6 +116,27 @@ jobs:
         with:
           name: municipality-registry
           path: data
+      - name: Inspect Portale PIAO search transport
+        run: |
+          python - <<'PY'
+          import requests
+          from bs4 import BeautifulSoup
+          url='https://piao.dfp.gov.it/piao?field_administration_ipa_value=c_l719&name='
+          r=requests.get(url,timeout=20)
+          print('STATUS',r.status_code,'URL',r.url)
+          soup=BeautifulSoup(r.text,'html.parser')
+          for form in soup.find_all('form'):
+              print('FORM',form.get('id'),form.get('class'),form.get('action'),form.get('method'))
+              for inp in form.find_all(['input','select']):
+                  print(' INPUT',inp.name,inp.get('name'),inp.get('value'),inp.get('id'),inp.get('class'))
+          for script in soup.find_all('script'):
+              if script.get('src'): print('SCRIPT',script.get('src'))
+          for a in soup.find_all('a',href=True):
+              h=a.get('href','')
+              t=' '.join(a.stripped_strings)
+              if 'node/' in h or 'piao' in h.lower() or 'plan' in h.lower(): print('LINK',h,t[:120])
+          print('HTML-LEN',len(r.text))
+          PY
       - name: Pilot official Portale PIAO collection
         run: |
           python scripts/collect_piao.py \
