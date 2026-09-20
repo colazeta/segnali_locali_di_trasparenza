@@ -118,6 +118,9 @@ jobs:
           path: data
       - name: Inspect Portale PIAO search transport
         run: python scripts/inspect_piao_transport.py
+      - name: Inspect Portale PIAO JSON API
+        run: python scripts/inspect_piao_api.py
+
       - name: Pilot official Portale PIAO collection
         run: |
           python scripts/collect_piao.py \
