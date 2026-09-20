@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 import os
 from collections import Counter
@@ -36,6 +37,28 @@ def append_result(path: Path, result: DiscoveryResult) -> None:
         writer.writerow(row)
 
 
+def deterministic_region_sample(frame: pd.DataFrame, per_region: int) -> pd.DataFrame:
+    """Stable technical sample; not intended for statistical inference."""
+    if per_region <= 0:
+        raise ValueError("per_region must be greater than zero")
+
+    sampled: list[pd.DataFrame] = []
+    working = frame.copy()
+    working["_sample_key"] = working["istat_code"].map(
+        lambda code: hashlib.sha256(str(code).encode("utf-8")).hexdigest()
+    )
+
+    for _, group in working.groupby("region_code", sort=True):
+        sampled.append(group.nsmallest(min(per_region, len(group)), "_sample_key"))
+
+    return (
+        pd.concat(sampled, ignore_index=True)
+        .drop(columns=["_sample_key"])
+        .sort_values(["region_code", "istat_code"])
+        .reset_index(drop=True)
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -52,6 +75,11 @@ def main() -> None:
         "--istat-codes",
         nargs="*",
         help="Optional explicit set of ISTAT codes to scan",
+    )
+    parser.add_argument(
+        "--sample-per-region",
+        type=int,
+        help="Deterministic technical sample of N municipalities per region",
     )
     parser.add_argument("--offset", type=int, default=0)
     parser.add_argument("--limit", type=int)
@@ -73,9 +101,14 @@ def main() -> None:
     registry = pd.read_csv(args.registry, dtype=str).fillna("")
     registry["istat_code"] = registry["istat_code"].astype(str).str.zfill(6)
 
+    if args.istat_codes and args.sample_per_region:
+        parser.error("--istat-codes and --sample-per-region are mutually exclusive")
+
     if args.istat_codes:
         requested = {str(code).zfill(6) for code in args.istat_codes}
         registry = registry[registry["istat_code"].isin(requested)]
+    elif args.sample_per_region:
+        registry = deterministic_region_sample(registry, args.sample_per_region)
 
     registry = registry.iloc[args.offset :]
     if args.limit is not None:
