@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -264,6 +265,9 @@ def main() -> None:
             ),
             flush=True,
         )
+
+        if args.delay > 0:
+            time.sleep(args.delay)
 
     print(json.dumps({"summary": counters}, ensure_ascii=False, indent=2))
 
