@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import csv
-import hashlib
 import json
 import os
 from collections import Counter
@@ -13,6 +12,7 @@ import pandas as pd
 from segnali_locali_di_trasparenza.transparency import (
     DiscoveryResult,
     PoliteClient,
+    deterministic_region_sample,
     discover_transparency,
 )
 
@@ -36,27 +36,6 @@ def append_result(path: Path, result: DiscoveryResult) -> None:
             writer.writeheader()
         writer.writerow(row)
 
-
-def deterministic_region_sample(frame: pd.DataFrame, per_region: int) -> pd.DataFrame:
-    """Stable technical sample; not intended for statistical inference."""
-    if per_region <= 0:
-        raise ValueError("per_region must be greater than zero")
-
-    sampled: list[pd.DataFrame] = []
-    working = frame.copy()
-    working["_sample_key"] = working["istat_code"].map(
-        lambda code: hashlib.sha256(str(code).encode("utf-8")).hexdigest()
-    )
-
-    for _, group in working.groupby("region_code", sort=True):
-        sampled.append(group.nsmallest(min(per_region, len(group)), "_sample_key"))
-
-    return (
-        pd.concat(sampled, ignore_index=True)
-        .drop(columns=["_sample_key"])
-        .sort_values(["region_code", "istat_code"])
-        .reset_index(drop=True)
-    )
 
 
 def main() -> None:
