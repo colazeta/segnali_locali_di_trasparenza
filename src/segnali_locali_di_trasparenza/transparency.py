@@ -39,17 +39,23 @@ class Candidate:
 @dataclass
 class DiscoveryResult:
     istat_code: str
+    ipa_code: str
     municipality_name: str
     institutional_url: str
     observed_at: str
     status: str
+    collector: str = "transparency_entrypoint"
+    collector_version: str = ""
+    methodology_version: str = "signal001-v1"
     homepage_final_url: str = ""
+    homepage_http_status: int | None = None
+    homepage_robots_status: str = ""
     transparency_url: str = ""
+    transparency_http_status: int | None = None
+    transparency_robots_status: str = ""
     discovery_method: str = ""
     anchor_text: str = ""
-    http_status: int | None = None
     evidence_sha256: str = ""
-    robots_status: str = ""
     error: str = ""
 
     def to_dict(self) -> dict[str, object]:
@@ -193,8 +199,11 @@ def _sha256_text(value: str) -> str:
 def discover_transparency(
     *,
     istat_code: str,
+    ipa_code: str,
     municipality_name: str,
     institutional_url: str,
+    collector_version: str = "",
+    methodology_version: str = "signal001-v1",
     client: PoliteClient | None = None,
     max_link_candidates: int = 4,
 ) -> DiscoveryResult:
@@ -203,10 +212,13 @@ def discover_transparency(
 
     result = DiscoveryResult(
         istat_code=istat_code,
+        ipa_code=ipa_code,
         municipality_name=municipality_name,
         institutional_url=institutional_url,
         observed_at=observed_at,
         status="not_started",
+        collector_version=collector_version,
+        methodology_version=methodology_version,
     )
 
     if not start_url:
@@ -216,7 +228,7 @@ def discover_transparency(
     client = client or PoliteClient()
 
     allowed, robots_status = client.robots_allowed(start_url)
-    result.robots_status = robots_status
+    result.homepage_robots_status = robots_status
     if not allowed:
         result.status = "robots_disallowed"
         return result
@@ -229,7 +241,7 @@ def discover_transparency(
         return result
 
     result.homepage_final_url = home.url
-    result.http_status = home.status_code
+    result.homepage_http_status = home.status_code
 
     if home.status_code >= 400:
         result.status = "homepage_http_error"
@@ -273,9 +285,9 @@ def discover_transparency(
         result.transparency_url = response.url
         result.discovery_method = candidate.discovery_method
         result.anchor_text = candidate.anchor_text
-        result.http_status = response.status_code
+        result.transparency_http_status = response.status_code
         result.evidence_sha256 = _sha256_text(response.text)
-        result.robots_status = candidate_robots
+        result.transparency_robots_status = candidate_robots
         return result
 
     if any_candidate_reachable:
