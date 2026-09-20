@@ -65,13 +65,20 @@ class DiscoveryResult:
         return asdict(self)
 
 
-def normalise_start_url(value: str) -> str:
+def start_url_candidates(value: str) -> list[str]:
+    """Return bounded start URLs, preferring HTTPS for scheme-less IPA values."""
     value = (value or "").strip()
     if not value:
-        return ""
+        return []
     if re.match(r"^https?://", value, flags=re.IGNORECASE):
-        return value
-    return f"https://{value.lstrip('/')}"
+        return [value]
+    host = value.lstrip("/")
+    return [f"https://{host}", f"http://{host}"]
+
+
+def normalise_start_url(value: str) -> str:
+    candidates = start_url_candidates(value)
+    return candidates[0] if candidates else ""
 
 
 def _same_host(url_a: str, url_b: str) -> bool:
@@ -279,7 +286,7 @@ def discover_transparency(
     max_link_candidates: int = 4,
 ) -> DiscoveryResult:
     observed_at = datetime.now(UTC).isoformat()
-    start_url = normalise_start_url(institutional_url)
+    start_urls = start_url_candidates(institutional_url)
 
     result = DiscoveryResult(
         istat_code=istat_code,
@@ -292,31 +299,45 @@ def discover_transparency(
         methodology_version=methodology_version,
     )
 
-    if not start_url:
+    if not start_urls:
         result.status = "missing_institutional_url"
         return result
 
     client = client or PoliteClient()
+    home = None
+    last_error = ""
+    last_http_status = None
 
-    allowed, robots_status = client.robots_allowed(start_url)
-    result.homepage_robots_status = robots_status
-    if not allowed:
-        result.status = "robots_disallowed"
-        return result
+    for start_url in start_urls:
+        allowed, robots_status = client.robots_allowed(start_url)
+        result.homepage_robots_status = robots_status
+        if not allowed:
+            result.status = "robots_disallowed"
+            return result
 
-    try:
-        home = client.get(start_url)
-    except requests.RequestException as exc:
-        result.status = "homepage_unreachable"
-        result.error = type(exc).__name__
+        try:
+            candidate_home = client.get(start_url)
+        except requests.RequestException as exc:
+            last_error = type(exc).__name__
+            continue
+
+        last_http_status = candidate_home.status_code
+        if candidate_home.status_code >= 400:
+            continue
+
+        home = candidate_home
+        break
+
+    if home is None:
+        result.error = last_error
+        result.homepage_http_status = last_http_status
+        result.status = (
+            "homepage_http_error" if last_http_status is not None else "homepage_unreachable"
+        )
         return result
 
     result.homepage_final_url = home.url
     result.homepage_http_status = home.status_code
-
-    if home.status_code >= 400:
-        result.status = "homepage_http_error"
-        return result
 
     candidates = extract_candidates(home.text, home.url)[:max_link_candidates]
 
