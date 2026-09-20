@@ -5,8 +5,8 @@ import json
 import re
 import time
 from dataclasses import asdict, dataclass
-from datetime import UTC, datetime
-from typing import Iterable
+from collections.abc import Iterable
+from datetime import UTC, date, datetime
 from urllib.parse import urljoin, urlparse
 
 import pandas as pd
@@ -111,11 +111,16 @@ def _normalise_date(value: str) -> str:
     value = _clean_text(value)
     if not value:
         return ""
-    for pattern in ("%d-%m-%Y", "%d/%m/%Y", "%Y-%m-%d"):
-        try:
-            return datetime.strptime(value[:10], pattern).date().isoformat()
-        except ValueError:
-            pass
+    iso_match = re.fullmatch(r"(20\\d{2})-(\\d{2})-(\\d{2})", value[:10])
+    if iso_match:
+        year, month, day = map(int, iso_match.groups())
+        return date(year, month, day).isoformat()
+
+    local_match = re.fullmatch(r"(\\d{2})[-/](\\d{2})[-/](20\\d{2})", value[:10])
+    if local_match:
+        day, month, year = map(int, local_match.groups())
+        return date(year, month, day).isoformat()
+
     return value
 
 
