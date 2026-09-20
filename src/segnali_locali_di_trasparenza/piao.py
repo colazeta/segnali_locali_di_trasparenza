@@ -111,12 +111,12 @@ def _normalise_date(value: str) -> str:
     value = _clean_text(value)
     if not value:
         return ""
-    iso_match = re.fullmatch(r"(20\\d{2})-(\\d{2})-(\\d{2})", value[:10])
+    iso_match = re.fullmatch(r"(20\d{2})-(\d{2})-(\d{2})", value[:10])
     if iso_match:
         year, month, day = map(int, iso_match.groups())
         return date(year, month, day).isoformat()
 
-    local_match = re.fullmatch(r"(\\d{2})[-/](\\d{2})[-/](20\\d{2})", value[:10])
+    local_match = re.fullmatch(r"(\d{2})[-/](\d{2})[-/](20\d{2})", value[:10])
     if local_match:
         day, month, year = map(int, local_match.groups())
         return date(year, month, day).isoformat()
