@@ -102,13 +102,13 @@ def main() -> None:
     manifest = {
         "generated_at": datetime.now(UTC).isoformat(),
         "source": PORTAL_INDEX_URL,
-        "registry_municipalities": int(len(registry)),
-        "node_urls_requested": int(len(urls)),
-        "plan_records_parsed": int(len(linked)),
+        "registry_municipalities": len(registry),
+        "node_urls_requested": len(urls),
+        "plan_records_parsed": len(linked),
         "plan_records_matched_to_municipalities": matched_plans,
-        "plan_records_unmatched": int(len(unmatched)),
+        "plan_records_unmatched": len(unmatched),
         "municipalities_with_any_piao": municipalities_with_any,
-        "municipalities_without_observed_piao": int(len(registry) - municipalities_with_any),
+        "municipalities_without_observed_piao": len(registry) - municipalities_with_any,
         "periods": sorted(
             {
                 str(value)
