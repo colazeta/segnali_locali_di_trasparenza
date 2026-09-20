@@ -110,7 +110,7 @@ jobs:
             --output "data/observations/transparency-shard-${{ matrix.shard }}.csv" \
             --shard-index "${{ matrix.shard }}" \
             --shard-count 40 \
-            --delay 0.5
+            --delay 0.5 \\\n            --timeout 8 \\\n            --retries 1
 
       - name: Upload shard
         uses: actions/upload-artifact@v4
