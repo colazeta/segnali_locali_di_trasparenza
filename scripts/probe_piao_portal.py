@@ -41,7 +41,24 @@ def main() -> None:
 
         text = bundle.text
         item["bytes"] = len(bundle.content)
-        endpoints.update(LOOSE_API_RE.findall(text))
+        matches = sorted(set(LOOSE_API_RE.findall(text)))
+        endpoints.update(matches)
+        contexts = []
+        for endpoint in matches:
+            start = 0
+            while True:
+                index = text.find(endpoint, start)
+                if index < 0:
+                    break
+                contexts.append(
+                    {
+                        "endpoint": endpoint,
+                        "context": text[max(0, index - 800) : index + 1400],
+                    }
+                )
+                start = index + len(endpoint)
+        if contexts:
+            item["contexts"] = contexts
         bundles.append(item)
 
     result = {
