@@ -97,5 +97,5 @@ Those are separate future signals and must be measured independently.
 ## Methodology versions
 
 - `signal001-v1`: initial bounded discovery procedure.
-- `signal001-v2`: adds bounded retries with backoff for transient network failures and
+- `signal001-v3`: adds bounded retries with backoff for transient network failures and
   HTTP 429/5xx responses; observation provenance records this version explicitly.
