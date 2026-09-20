@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import os
 from collections import Counter
 from pathlib import Path
 
@@ -57,6 +58,16 @@ def main() -> None:
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--delay", type=float, default=0.35)
     parser.add_argument("--timeout", type=float, default=20)
+    parser.add_argument(
+        "--collector-version",
+        default=os.environ.get("GITHUB_SHA", "local"),
+        help="Code revision recorded with every observation",
+    )
+    parser.add_argument(
+        "--methodology-version",
+        default="signal001-v1",
+        help="Versioned methodology identifier",
+    )
     args = parser.parse_args()
 
     registry = pd.read_csv(args.registry, dtype=str).fillna("")
@@ -85,8 +96,11 @@ def main() -> None:
 
         result = discover_transparency(
             istat_code=row.istat_code,
+            ipa_code=row.ipa_code,
             municipality_name=row.name,
             institutional_url=row.institutional_url,
+            collector_version=args.collector_version,
+            methodology_version=args.methodology_version,
             client=client,
         )
         append_result(output_path, result)
