@@ -49,7 +49,7 @@ class DiscoveryResult:
     status: str
     collector: str = "transparency_entrypoint"
     collector_version: str = ""
-    methodology_version: str = "signal001-v2"
+    methodology_version: str = "signal001-v3"
     homepage_final_url: str = ""
     homepage_http_status: int | None = None
     homepage_robots_status: str = ""
@@ -281,7 +281,7 @@ def discover_transparency(
     municipality_name: str,
     institutional_url: str,
     collector_version: str = "",
-    methodology_version: str = "signal001-v2",
+    methodology_version: str = "signal001-v3",
     client: PoliteClient | None = None,
     max_link_candidates: int = 4,
 ) -> DiscoveryResult:
