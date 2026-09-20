@@ -119,7 +119,7 @@ jobs:
             --publications-output "data/piao-shards/publications-${{ matrix.shard }}.csv" \
             --shard-index "${{ matrix.shard }}" \
             --shard-count 40 \
-            --current-reference-year 2026 \
+            --target-start-year 2026 \
             --delay 0.35 \
             --timeout 20 \
             --retries 2
