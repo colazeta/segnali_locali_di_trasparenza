@@ -224,6 +224,39 @@ def main() -> None:
                 item["status_code"] = api_response.status_code
                 item["content_type"] = api_response.headers.get("content-type", "")
                 item["sample"] = api_response.text[:12000]
+                try:
+                    payload = api_response.json()
+                except ValueError:
+                    payload = None
+                if isinstance(payload, dict):
+                    item["json_top_keys"] = sorted(payload)
+                    result_value = payload.get("result")
+                    if (
+                        isinstance(result_value, list)
+                        and result_value
+                        and isinstance(result_value[0], dict)
+                    ):
+                        item["result_container_keys"] = sorted(result_value[0])
+                        records = result_value[0].get("list", [])
+                        item["total"] = result_value[0].get("total")
+                        if isinstance(records, list) and records:
+                            record = records[0]
+                            if isinstance(record, dict):
+                                item["record_keys"] = sorted(record)
+                                item["record_scalar_values"] = {
+                                    key: value
+                                    for key, value in record.items()
+                                    if not isinstance(value, (dict, list))
+                                }
+                                content_value = record.get("content")
+                                if isinstance(content_value, dict):
+                                    item["content_keys"] = sorted(content_value)
+                                    item["content_scalar_values"] = {
+                                        key: value.get("value")
+                                        for key, value in content_value.items()
+                                        if isinstance(value, dict)
+                                        and not value.get("files")
+                                    }
             except requests.RequestException as exc:
                 item["error"] = type(exc).__name__
             public_api_probes.append(item)
