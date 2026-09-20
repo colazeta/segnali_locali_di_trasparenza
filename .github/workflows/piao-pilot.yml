@@ -1,0 +1,48 @@
+name: PIAO public API validation
+
+on:
+  pull_request:
+    paths:
+      - "src/segnali_locali_di_trasparenza/piao.py"
+      - "scripts/collect_piao.py"
+      - "scripts/consolidate_piao.py"
+      - "tests/test_piao.py"
+      - ".github/workflows/piao-pilot.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pilot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install
+        run: pip install -e ".[dev]"
+
+      - name: Build municipality registry
+        run: python scripts/build_municipality_registry.py
+
+      - name: Collect public PIAO metadata for pilot municipalities
+        run: |
+          python scripts/collect_piao.py \
+            --registry data/processed/municipalities.csv \
+            --status-output data/piao/pilot-status.csv \
+            --publications-output data/piao/pilot-publications.csv \
+            --istat-codes 001168 015146 021014 058091 079160 \
+            --current-reference-year 2026 \
+            --delay 0.35
+
+      - name: Upload pilot
+        uses: actions/upload-artifact@v4
+        with:
+          name: piao-pilot
+          path: data/piao/
+          retention-days: 30
