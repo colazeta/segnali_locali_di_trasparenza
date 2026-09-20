@@ -112,7 +112,7 @@ def extract_node_urls(html: str, base_url: str = PORTAL_BASE) -> list[str]:
         if not match:
             continue
         node_id = match.group(1)
-        urls[node_id] = urljoin(base_url, href)
+        urls[node_id] = urljoin(base_url, f"/node/{node_id}")
     return [urls[key] for key in sorted(urls, key=int)]
 
 
