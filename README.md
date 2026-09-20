@@ -1,62 +1,40 @@
 # Segnali locali di trasparenza
 
-Monitor nazionale, verificabile e versionato di segnali osservabili di trasparenza nei comuni italiani.
+Monitor nazionale dei **PIAO pubblicati dai comuni italiani**.
 
-## Obiettivo
+## Perimetro attuale
 
-Il progetto costruisce una base canonica dei comuni italiani e registra nel tempo segnali di trasparenza pubblica come osservazioni separate, datate e corredate da evidenze.
+Per ora il progetto monitora un solo fenomeno: la presenza di PIAO sul **Portale PIAO ufficiale del Dipartimento della Funzione Pubblica**.
 
-Principi iniziali:
+Per ciascuno dei 7.894 comuni il sistema mantiene l'anagrafica ISTAT↔IPA e raccoglie tutte le schede PIAO reperibili sul portale ufficiale.
 
-- il **comune** è un'entità amministrativa versionata nel tempo;
-- l'**ente pubblico** che rappresenta il comune è collegato, ma non coincide concettualmente con esso;
-- un **segnale di trasparenza** è un'osservazione riproducibile con fonte, timestamp, evidenza e versione metodologica;
-- nessun punteggio sintetico viene introdotto prima di aver definito e validato indicatori osservabili;
-- le fonti nazionali ufficiali sono preferite alle ricostruzioni proprietarie;
-- la UI pubblica non deve dipendere in tempo reale da servizi esterni non controllati.
+Per ogni PIAO conserva almeno:
 
-## Milestone 0 — Registry nazionale dei comuni
+- comune e codice ISTAT;
+- codice IPA;
+- presenza sul Portale PIAO;
+- anno/triennio di riferimento;
+- data di approvazione;
+- data di pubblicazione sul Portale PIAO, quando esposta dai metadati della pagina;
+- URL della scheda ufficiale;
+- URL del PDF;
+- eventuale link al PIAO sul sito dell'ente;
+- timestamp e hash dell'osservazione.
 
-Il primo layer collega:
+**Data di approvazione e data di pubblicazione restano campi distinti.** Se il Portale non espone una data di pubblicazione affidabile, il campo resta vuoto.
 
-1. **ISTAT / SITUAS** — identità territoriale canonica e variazioni amministrative;
-2. **IPA / AgID** — identità dell'ente pubblico, Codice IPA, codice fiscale e sito istituzionale;
-3. **Cruscotto Italia / AgID** — enrichment e controlli incrociati per codice ISTAT.
+## Fonti
 
-Il codice ISTAT a 6 cifre è la chiave corrente di interoperabilità, ma non viene trattato come identificatore eterno: la successiva lineage layer conserverà ricodifiche, fusioni, soppressioni e cambi di denominazione.
+1. ISTAT / SITUAS — identità e storia amministrativa dei comuni;
+2. IPA / AgID — identificazione dell'ente pubblico e codice IPA;
+3. Portale PIAO / Dipartimento della Funzione Pubblica — fonte primaria delle pubblicazioni PIAO.
 
-## Esecuzione
+## Output
 
-Richiede Python 3.11+.
+- `data/observations/piao_publications.csv` — tutte le pubblicazioni PIAO osservate;
+- `data/processed/municipalities_piao_latest.csv` — un record per comune con l'ultimo PIAO osservato;
+- `data/manifests/piao_snapshot.json` — copertura, conteggi e provenance.
 
-```bash
-pip install -e ".[dev]"
-pytest -q
-python scripts/build_municipality_registry.py
-```
+Il progetto **non produce attualmente score di trasparenza** e non monitora genericamente la sezione “Amministrazione trasparente”.
 
-Il build scarica le fonti ufficiali in `data/raw/` (non versionata) e produce:
-
-- `data/processed/municipalities.csv`
-- `data/processed/municipalities.jsonl`
-- `data/manifests/municipality_registry.json`
-
-Il manifest registra timestamp, URL delle fonti, hash dei file scaricati e metriche di linkage.
-
-## Linkage ISTAT ↔ IPA
-
-Il join è deliberatamente conservativo. IPA categoria `L6` comprende anche consorzi e associazioni di comuni; per questo i casi non deterministici sono marcati `ambiguous` o `unmatched`, non risolti tramite fuzzy matching automatico.
-
-## Documentazione
-
-- [Architecture](docs/ARCHITECTURE.md)
-- [Data model](docs/DATA_MODEL.md)
-- [Official sources](docs/SOURCES.md)
-
-## Automazione
-
-GitHub Actions esegue test e lint sulle modifiche e ricostruisce settimanalmente uno snapshot del registry usando le fonti ufficiali. Lo snapshot viene pubblicato come artifact di workflow; non viene ancora auto-committato nel repository.
-
-## Stato
-
-Repository inizializzato il 20 settembre 2026. La milestone 0 precede i collector specifici di trasparenza.
+Vedi [PIAO monitor](docs/PIAO_MONITOR.md) per la metodologia.
