@@ -2,6 +2,8 @@ name: national PIAO snapshot
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: "23 5 * * 1"
   push:
     branches:
       - main
