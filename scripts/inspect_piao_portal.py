@@ -205,3 +205,33 @@ def inspect_public_catalogue_embeds() -> None:
 
 if __name__ == "__main__":
     inspect_public_catalogue_embeds()
+
+
+def probe_public_api() -> None:
+    session = requests.Session()
+    session.headers.update(
+        {
+            "User-Agent": (
+                "Mozilla/5.0 (compatible; SegnaliLocaliDiTrasparenza/0.2; "
+                "+https://github.com/colazeta/segnali_locali_di_trasparenza)"
+            ),
+            "Accept": "application/json",
+        }
+    )
+    probes = [
+        "https://piao.dfp.gov.it/api/piao?page=0",
+        "https://piao.dfp.gov.it/api/piao?ipaCode=c_m208&page=0",
+        "https://piao.dfp.gov.it/api/piao?administrationName=Lamezia%20Terme&page=0",
+        "https://piao.dfp.gov.it/api/administrations?administrationName=Lamezia&limit=10",
+    ]
+    for url in probes:
+        response = session.get(url, timeout=30)
+        print(
+            f"PUBLIC_API status={response.status_code} type={response.headers.get('content-type')} "
+            f"bytes={len(response.content)} url={response.url}"
+        )
+        print(f"  PUBLIC_API_BODY {response.text[:8000]}")
+
+
+if __name__ == "__main__":
+    probe_public_api()
