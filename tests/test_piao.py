@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from segnali_locali_di_trasparenza.piao import (
+    fetch_public_catalogue,
     fetch_publications_for_ipa,
     normalise_publication,
     parse_reference_period,
@@ -130,3 +131,67 @@ def test_fetch_publications_paginates_until_total() -> None:
     assert total == 2
     assert [record["version"] for record in records] == [1, 2]
     assert session.requested_pages == [0, 1]
+
+
+
+class FakeCatalogueSession:
+    def __init__(self) -> None:
+        municipal_1 = sample_record(version=1)
+        municipal_2 = sample_record(version=2)
+        other = sample_record(version=1)
+        other["administrationIpaCode"] = "other_pa"
+        other["administrationName"] = "Other Public Administration"
+        other["years"] = "Anno 2026-2028"
+        other["content"]["piaoPDF"]["files"][0]["url"] = (
+            "https://portale-piao.dfp.gov.it/api/piao/document?f=other.pdf"
+        )
+        self.pages = {
+            0: {
+                "success": True,
+                "result": [
+                    {
+                        "list": [municipal_1, other],
+                        "count": 2,
+                        "total": 3,
+                    }
+                ],
+            },
+            1: {
+                "success": True,
+                "result": [
+                    {
+                        "list": [municipal_2],
+                        "count": 1,
+                        "total": 3,
+                    }
+                ],
+            },
+        }
+        self.params: list[dict[str, Any]] = []
+
+    def get(self, url: str, *, params: dict[str, Any], timeout: float) -> FakeResponse:
+        del url, timeout
+        self.params.append(dict(params))
+        return FakeResponse(self.pages[int(params["page"])])
+
+
+def test_fetch_public_catalogue_filters_after_full_completeness_check() -> None:
+    session = FakeCatalogueSession()
+
+    records, metadata = fetch_public_catalogue(
+        session=session,  # type: ignore[arg-type]
+        delay_seconds=0,
+        keep_ipa_codes={"c_m208"},
+    )
+
+    assert len(records) == 2
+    assert {record["administrationIpaCode"] for record in records} == {"c_m208"}
+    assert metadata == {
+        "pages_fetched": 2,
+        "first_total": 3,
+        "last_total": 3,
+        "unique_catalogue_records_seen": 3,
+        "selected_records": 2,
+        "filtered_out_records": 1,
+    }
+    assert session.params == [{"page": 0}, {"page": 1}]
