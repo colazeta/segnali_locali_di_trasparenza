@@ -75,6 +75,7 @@ The collector:
 - respects `robots.txt`;
 - caches robots policy per origin within a run;
 - applies a delay between requests;
+- retries bounded transient connection/read failures and HTTP 429/5xx responses with backoff;
 - uses bounded candidate and fallback checks;
 - supports restart/resume;
 - does not brute-force arbitrary URL paths.
@@ -91,3 +92,10 @@ Finding an entry point does not establish:
 - accuracy of published information.
 
 Those are separate future signals and must be measured independently.
+
+
+## Methodology versions
+
+- `signal001-v1`: initial bounded discovery procedure.
+- `signal001-v2`: adds bounded retries with backoff for transient network failures and
+  HTTP 429/5xx responses; observation provenance records this version explicitly.
