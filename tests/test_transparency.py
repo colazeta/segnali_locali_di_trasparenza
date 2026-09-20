@@ -9,12 +9,21 @@ from segnali_locali_di_trasparenza.transparency import (
     extract_candidates,
     normalise_start_url,
     page_looks_like_transparency,
+    start_url_candidates,
 )
 
 
 def test_normalise_start_url_adds_https() -> None:
     assert normalise_start_url("example.gov.it") == "https://example.gov.it"
     assert normalise_start_url("https://example.gov.it") == "https://example.gov.it"
+
+
+def test_scheme_less_start_url_candidates_prefer_https_then_http() -> None:
+    assert start_url_candidates("example.gov.it") == [
+        "https://example.gov.it",
+        "http://example.gov.it",
+    ]
+    assert start_url_candidates("http://example.gov.it") == ["http://example.gov.it"]
 
 
 def test_extract_candidates_prioritises_explicit_transparency_link() -> None:
