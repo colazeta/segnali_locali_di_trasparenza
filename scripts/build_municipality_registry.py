@@ -16,6 +16,16 @@ from segnali_locali_di_trasparenza.registry import (
 )
 
 
+def load_curated_aliases(path: Path) -> dict[str, list[str]]:
+    if not path.exists():
+        return {}
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    return {
+        str(istat_code): list(record.get("aliases", []))
+        for istat_code, record in payload.items()
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--data-dir", default="data", help="Root data directory")
@@ -23,6 +33,11 @@ def main() -> None:
         "--no-download",
         action="store_true",
         help="Use already-downloaded source files in data/raw",
+    )
+    parser.add_argument(
+        "--alias-config",
+        default="config/ipa_entity_aliases.json",
+        help="Audited municipality-to-IPA legal-name aliases",
     )
     args = parser.parse_args()
 
@@ -48,9 +63,10 @@ def main() -> None:
             "Missing source files. Run without --no-download or provide both files in data/raw."
         )
 
+    curated_aliases = load_curated_aliases(Path(args.alias_config))
     istat = read_istat(istat_path)
     ipa = read_ipa(ipa_path)
-    registry = link_ipa(istat, ipa)
+    registry = link_ipa(istat, ipa, curated_aliases=curated_aliases)
     metrics = validate_registry(registry)
 
     registry = registry.sort_values(["region_code", "supra_code", "istat_code"]).reset_index(
@@ -59,8 +75,11 @@ def main() -> None:
 
     csv_path = processed_dir / "municipalities.csv"
     jsonl_path = processed_dir / "municipalities.jsonl"
+    unresolved_path = processed_dir / "municipalities_unresolved_ipa.csv"
+
     registry.to_csv(csv_path, index=False)
     registry.to_json(jsonl_path, orient="records", lines=True, force_ascii=False)
+    registry.loc[registry["ipa_code"].eq("")].to_csv(unresolved_path, index=False)
 
     manifest = {
         "generated_at": datetime.now(UTC).isoformat(),
@@ -70,9 +89,11 @@ def main() -> None:
         },
         "source_hashes": source_hashes,
         "metrics": metrics,
+        "curated_alias_codes": sorted(curated_aliases),
         "outputs": {
             "csv": str(csv_path),
             "jsonl": str(jsonl_path),
+            "unresolved_ipa": str(unresolved_path),
         },
     }
     (manifest_dir / "municipality_registry.json").write_text(
