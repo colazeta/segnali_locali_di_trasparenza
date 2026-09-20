@@ -108,3 +108,56 @@ def probe_api() -> None:
 
 if __name__ == "__main__":
     probe_api()
+
+
+def inspect_public_catalogue() -> None:
+    session = requests.Session()
+    session.headers.update(
+        {
+            "User-Agent": (
+                "Mozilla/5.0 (compatible; SegnaliLocaliDiTrasparenza/0.2; "
+                "+https://github.com/colazeta/segnali_locali_di_trasparenza)"
+            )
+        }
+    )
+    url = "https://piao.dfp.gov.it/piao"
+    response = session.get(url, timeout=30)
+    print(
+        f"PUBLIC status={response.status_code} final={response.url} "
+        f"type={response.headers.get('content-type')} bytes={len(response.content)}"
+    )
+    response.raise_for_status()
+    html = response.text
+
+    patterns = [
+        r"views/ajax",
+        r"/node/\\d+",
+        r"view_dom_id",
+        r"data-drupal-selector",
+        r"views-exposed-form",
+        r"pager",
+        r"search",
+        r"field_anno",
+        r"anno",
+    ]
+    for pattern in patterns:
+        matches = list(re.finditer(pattern, html, flags=re.IGNORECASE))
+        print(f"PUBLIC_PATTERN {pattern} count={len(matches)}")
+        for match in matches[:20]:
+            pos = match.start()
+            snippet = html[max(0, pos - 350) : min(len(html), pos + 800)]
+            snippet = re.sub(r"\\s+", " ", snippet)
+            print(f"  PUBLIC_SNIPPET {snippet}")
+
+    for src in SCRIPT_RE.findall(html):
+        print(f"PUBLIC_SCRIPT {urljoin(response.url, src)}")
+
+    hrefs = re.findall(r"""href=["']([^"']+)["']""", html, flags=re.IGNORECASE)
+    node_hrefs = sorted({urljoin(response.url, h) for h in hrefs if "/node/" in h})
+    print(f"PUBLIC_NODE_HREFS count={len(node_hrefs)}")
+    for item in node_hrefs[:50]:
+        print(f"  PUBLIC_NODE {item}")
+
+
+if __name__ == "__main__":
+    inspect_public_catalogue()
