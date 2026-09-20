@@ -182,13 +182,18 @@ def main() -> None:
                 continue
             script_text = script_response.text
             for needle in [
-                "/views/ajax",
-                "views/ajax",
-                "view_name",
-                "view_display_id",
-                "drupalSettings",
-                "/piao",
-                "PIAO",
+                "piao-react-view",
+                "/api/piao?",
+                "/api/administrations?",
+                "approvalDate",
+                "publicationDate",
+                "published",
+                "creationDate",
+                "piaoPDF",
+                "attachments",
+                "linkPiaoPA",
+                "piaoId",
+                "version",
             ]:
                 start = 0
                 while True:
@@ -203,7 +208,26 @@ def main() -> None:
                         }
                     )
                     start = index + len(needle)
-        public_catalog["script_contexts"] = public_script_contexts[:100]
+        public_catalog["script_contexts"] = public_script_contexts[:120]
+
+        public_api_probes = []
+        for path in [
+            "/api/piao?page=0",
+            "/api/piao?ipaCode=c_m208&page=0",
+            "/api/administrations?ipaCode=c_m208&limit=5",
+            "/api/administrations?administrationName=Lamezia%20Terme&limit=5",
+        ]:
+            url = urljoin(public_response.url, path)
+            item = {"url": url}
+            try:
+                api_response = session.get(url, timeout=60)
+                item["status_code"] = api_response.status_code
+                item["content_type"] = api_response.headers.get("content-type", "")
+                item["sample"] = api_response.text[:12000]
+            except requests.RequestException as exc:
+                item["error"] = type(exc).__name__
+            public_api_probes.append(item)
+        public_catalog["api_probes"] = public_api_probes
         public_catalog["links"] = [
             tag.get("href", "")
             for tag in public_soup.find_all("a", href=True)
