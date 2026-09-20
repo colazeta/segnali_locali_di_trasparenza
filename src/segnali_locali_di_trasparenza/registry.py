@@ -110,7 +110,7 @@ def _resolve_column(
 
 def read_istat(path: Path) -> pd.DataFrame:
     """Normalise the current ISTAT municipality workbook to the project schema."""
-    raw = pd.read_excel(path, dtype=str)
+    raw = pd.read_excel(path, dtype=str, keep_default_na=False)
 
     columns = {
         "istat_code": _resolve_column(
@@ -194,7 +194,7 @@ def read_istat(path: Path) -> pd.DataFrame:
 
 def read_ipa(path: Path) -> pd.DataFrame:
     """Read IPA entities and retain only the fields needed for municipality linkage."""
-    raw = pd.read_excel(path, dtype=str)
+    raw = pd.read_excel(path, dtype=str, keep_default_na=False)
 
     needed = {
         "ipa_code": "Codice_IPA",
