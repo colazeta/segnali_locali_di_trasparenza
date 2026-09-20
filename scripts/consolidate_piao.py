@@ -111,7 +111,7 @@ def main() -> None:
     status_counts = Counter(status["lookup_status"])
     found = status[status["lookup_status"].eq("found")]
     current_present = status[
-        status["current_period_present"].astype(str).str.lower().eq("true")
+        status["period_starting_target_year_present"].astype(str).str.lower().eq("true")
     ]
 
     manifest = {
@@ -120,7 +120,7 @@ def main() -> None:
         "municipality_status_rows": len(status),
         "publication_rows": len(publications),
         "municipalities_with_any_piao": len(found),
-        "municipalities_with_current_reference_year_piao": len(current_present),
+        "municipalities_with_period_starting_target_year_piao": len(current_present),
         "status_counts": dict(status_counts),
         "coverage": {
             "duplicate_status_codes": duplicate_status,
