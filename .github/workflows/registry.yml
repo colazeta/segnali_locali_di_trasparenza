@@ -120,17 +120,16 @@ jobs:
           name: municipality-registry
           path: data
 
-      - name: Regional transparency entry-point stress test
+      - name: Pilot transparency entry-point discovery
         run: |
           python scripts/discover_transparency.py \
             --registry data/processed/municipalities.csv \
-            --output data/observations/transparency_regional_sample.csv \
-            --sample-per-region 2 \
+            --istat-codes 021014 021053 022250 058091 079160 \
             --delay 0.5
 
-      - name: Upload regional sample observations
+      - name: Upload pilot observations
         uses: actions/upload-artifact@v4
         with:
-          name: transparency-regional-sample
+          name: transparency-pilot
           path: data/observations/
           retention-days: 30
