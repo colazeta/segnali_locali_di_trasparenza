@@ -16,6 +16,7 @@ USER_AGENT = (
     "segnali-locali-di-trasparenza/0.1 "
     "(+https://github.com/colazeta/segnali_locali_di_trasparenza)"
 )
+ROBOTS_USER_AGENT = "segnali-locali-di-trasparenza"
 TRANSPARENCY_RE = re.compile(
     r"amministrazione\s*trasparente|trasparenza|transparenz",
     flags=re.IGNORECASE,
@@ -134,6 +135,7 @@ class PoliteClient:
         self.delay_seconds = max(delay_seconds, 0)
         self.timeout_seconds = timeout_seconds
         self._last_request_at = 0.0
+        self._robots_cache: dict[str, tuple[RobotFileParser | None, str]] = {}
         self.session.headers.update(
             {
                 "User-Agent": USER_AGENT,
@@ -157,20 +159,30 @@ class PoliteClient:
 
     def robots_allowed(self, target_url: str) -> tuple[bool, str]:
         parsed = urlparse(target_url)
-        robots_url = f"{parsed.scheme}://{parsed.netloc}/robots.txt"
+        origin = f"{parsed.scheme}://{parsed.netloc}"
+        cached = self._robots_cache.get(origin)
 
-        try:
-            response = self.get(robots_url)
-        except requests.RequestException:
-            return True, "robots_unavailable"
+        if cached is None:
+            robots_url = f"{origin}/robots.txt"
+            try:
+                response = self.get(robots_url)
+            except requests.RequestException:
+                cached = (None, "robots_unavailable")
+            else:
+                if response.status_code >= 400:
+                    cached = (None, f"robots_http_{response.status_code}")
+                else:
+                    parser = RobotFileParser()
+                    parser.set_url(robots_url)
+                    parser.parse(response.text.splitlines())
+                    cached = (parser, "loaded")
+            self._robots_cache[origin] = cached
 
-        if response.status_code >= 400:
-            return True, f"robots_http_{response.status_code}"
+        parser, status = cached
+        if parser is None:
+            return True, status
 
-        parser = RobotFileParser()
-        parser.set_url(robots_url)
-        parser.parse(response.text.splitlines())
-        allowed = parser.can_fetch(USER_AGENT, target_url)
+        allowed = parser.can_fetch(ROBOTS_USER_AGENT, target_url)
         return allowed, "allowed" if allowed else "disallowed"
 
 
