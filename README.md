@@ -68,7 +68,7 @@ Non vengono usati timestamp dei motori di ricerca, date dei PDF o header HTTP co
 
 - PIAO presente sul portale: sì/no;
 - numero di PIAO osservati;
-- presenza del PIAO relativo all'anno corrente;
+- presenza di un PIAO il cui **periodo di riferimento inizia nell'anno target** (es. `2026–2028` per target `2026`);
 - ultimo periodo disponibile;
 - ultima data di approvazione;
 - URL dell'ultimo PIAO.
