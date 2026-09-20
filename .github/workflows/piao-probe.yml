@@ -28,7 +28,10 @@ jobs:
           for params in [
               {"page": 0},
               {"page": 0, "limit": 100},
-              {"page": 0, "limit": 500},
+              {"page": 0, "years": "2026-2028"},
+              {"page": 0, "years": "Anno 2026-2028"},
+              {"page": 0, "year": "2026"},
+              {"page": 0, "referenceYear": "2026"},
           ]:
               r = requests.get(url, params=params, timeout=30)
               print("request", r.url, "status", r.status_code)
