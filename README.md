@@ -1,62 +1,101 @@
 # Segnali locali di trasparenza
 
-Monitor nazionale, verificabile e versionato di segnali osservabili di trasparenza nei comuni italiani.
+Monitor nazionale dei **PIAO pubblicati dai comuni italiani** sul Portale PIAO del Dipartimento della Funzione Pubblica.
 
-## Obiettivo
+## Perimetro corrente
 
-Il progetto costruisce una base canonica dei comuni italiani e registra nel tempo segnali di trasparenza pubblica come osservazioni separate, datate e corredate da evidenze.
+In questa fase il progetto monitora **una sola cosa**:
 
-Principi iniziali:
+> per ciascuno dei 7.894 comuni italiani correnti, esiste almeno un PIAO nel Portale PIAO ufficiale e a quale periodo si riferisce?
 
-- il **comune** è un'entità amministrativa versionata nel tempo;
-- l'**ente pubblico** che rappresenta il comune è collegato, ma non coincide concettualmente con esso;
-- un **segnale di trasparenza** è un'osservazione riproducibile con fonte, timestamp, evidenza e versione metodologica;
-- nessun punteggio sintetico viene introdotto prima di aver definito e validato indicatori osservabili;
-- le fonti nazionali ufficiali sono preferite alle ricostruzioni proprietarie;
-- la UI pubblica non deve dipendere in tempo reale da servizi esterni non controllati.
+Non vengono monitorate genericamente le sezioni “Amministrazione trasparente” e non viene prodotto alcun punteggio di trasparenza.
 
-## Milestone 0 — Registry nazionale dei comuni
+## Base comunale
 
-Il primo layer collega:
+Il registry nazionale collega deterministicamente tutti i comuni correnti:
 
-1. **ISTAT / SITUAS** — identità territoriale canonica e variazioni amministrative;
-2. **IPA / AgID** — identità dell'ente pubblico, Codice IPA, codice fiscale e sito istituzionale;
-3. **Cruscotto Italia / AgID** — enrichment e controlli incrociati per codice ISTAT.
+- **ISTAT / SITUAS** — identità territoriale;
+- **IPA / AgID** — Codice IPA dell'ente;
+- 7.894 comuni correnti;
+- 7.894 collegamenti ISTAT ↔ IPA;
+- 0 ambigui;
+- 0 non collegati.
 
-Il codice ISTAT a 6 cifre è la chiave corrente di interoperabilità, ma non viene trattato come identificatore eterno: la successiva lineage layer conserverà ricodifiche, fusioni, soppressioni e cambi di denominazione.
+Il Codice IPA è la chiave usata per interrogare il Portale PIAO.
+
+## Fonte PIAO
+
+Fonte primaria:
+
+- Portale PIAO — Dipartimento della Funzione Pubblica
+- catalogo: https://piao.dfp.gov.it/piao
+- API pubblica utilizzata dal catalogo: `GET /api/piao?ipaCode=<CODICE_IPA>&page=<N>`
+
+Per ogni PIAO osservato vengono conservati:
+
+- codice ISTAT del comune;
+- Codice IPA;
+- denominazione del comune e denominazione mostrata dal Portale;
+- periodo di riferimento, ad esempio `2026-2028`;
+- anno iniziale e anno finale;
+- versione del PIAO;
+- data di approvazione;
+- estremi dell'atto di approvazione;
+- autorità approvante;
+- URL ufficiale del documento PIAO;
+- URL dell'atto di approvazione;
+- URL del PIAO sul sito dell'ente, quando disponibile;
+- allegati;
+- timestamp di acquisizione.
+
+### Data di pubblicazione
+
+La **data di approvazione** e la **data di pubblicazione sul Portale PIAO** sono concetti distinti.
+
+L'API pubblica anonima verificata il 20 settembre 2026 espone la data di approvazione ma **non espone un timestamp storico di pubblicazione sul Portale**. Per questo:
+
+- `approval_date` contiene esclusivamente la data di approvazione;
+- `portal_publication_date` resta vuoto quando la fonte ufficiale non lo espone;
+- `retrieved_at` registra quando il monitor ha osservato il PIAO.
+
+Non vengono usati timestamp dei motori di ricerca, date dei PDF o header HTTP come sostituti della data ufficiale di pubblicazione.
+
+## Output
+
+### Una riga per comune
+
+`piao_status.csv` contiene, per ogni comune:
+
+- PIAO presente sul portale: sì/no;
+- numero di PIAO osservati;
+- presenza del PIAO relativo all'anno corrente;
+- ultimo periodo disponibile;
+- ultima data di approvazione;
+- URL dell'ultimo PIAO.
+
+### Una riga per PIAO
+
+`piao_publications.csv` e `piao_publications.jsonl` conservano tutti i PIAO osservati, non soltanto l'ultimo.
 
 ## Esecuzione
-
-Richiede Python 3.11+.
 
 ```bash
 pip install -e ".[dev]"
 pytest -q
 python scripts/build_municipality_registry.py
+python scripts/collect_piao.py --registry data/processed/municipalities.csv
 ```
-
-Il build scarica le fonti ufficiali in `data/raw/` (non versionata) e produce:
-
-- `data/processed/municipalities.csv`
-- `data/processed/municipalities.jsonl`
-- `data/manifests/municipality_registry.json`
-
-Il manifest registra timestamp, URL delle fonti, hash dei file scaricati e metriche di linkage.
-
-## Linkage ISTAT ↔ IPA
-
-Il join è deliberatamente conservativo. IPA categoria `L6` comprende anche consorzi e associazioni di comuni; per questo i casi non deterministici sono marcati `ambiguous` o `unmatched`, non risolti tramite fuzzy matching automatico.
 
 ## Documentazione
 
+- [PIAO source and API](docs/PIAO_SOURCE.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Data model](docs/DATA_MODEL.md)
+- [Municipality lineage](docs/LINEAGE.md)
 - [Official sources](docs/SOURCES.md)
 
-## Automazione
+## Semantica dell'assenza
 
-GitHub Actions esegue test e lint sulle modifiche e ricostruisce settimanalmente uno snapshot del registry usando le fonti ufficiali. Lo snapshot viene pubblicato come artifact di workflow; non viene ancora auto-committato nel repository.
+`piao_present_on_portal = false` significa soltanto che, durante quella rilevazione, l'API pubblica del Portale PIAO non ha restituito un PIAO per quel Codice IPA.
 
-## Stato
-
-Repository inizializzato il 20 settembre 2026. La milestone 0 precede i collector specifici di trasparenza.
+Non equivale automaticamente a inadempimento normativo.
