@@ -118,3 +118,52 @@ derived_indicator
 ```
 
 Each derived record must be reproducible from persisted observations.
+
+
+## PIAO plan record
+
+Signal 001 uses a plan-level table:
+
+```
+piao_plan
+  portal_node_id
+  portal_url
+  portal_entity_code
+  administration_name
+  istat_code
+  municipality_match_basis
+  period_label
+  period_start_year
+  period_end_year
+  approval_date
+  portal_published_at
+  pdf_url
+  pa_url
+  fetched_at
+  source_html_sha256
+```
+
+`approval_date` is the approval date explicitly shown by Portale PIAO.
+
+`portal_published_at` is populated only when publication metadata are explicitly exposed by the source page. It is not inferred from approval date.
+
+## Municipality PIAO view
+
+A derived current-municipality table contains:
+
+```
+municipality_piao
+  istat_code
+  ipa_code
+  name
+  piao_present_any
+  piao_count
+  piao_latest_period
+  piao_latest_approval_date
+  piao_latest_portal_published_at
+  piao_latest_portal_url
+  piao_latest_pdf_url
+  piao_latest_pa_url
+```
+
+All historical plan rows remain available in the plan-level table.
