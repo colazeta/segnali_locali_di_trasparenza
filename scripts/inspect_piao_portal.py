@@ -43,9 +43,16 @@ def main() -> None:
         for endpoint in endpoints:
             print(f"  API {endpoint}")
 
-        for keyword in ["piao/document", "piao", "amministr", "annualita", "anno"]:
+        for keyword in ["piao/document", "piaoExport", "piao", "amministr", "annualita", "anno"]:
             if keyword.lower() in text.lower():
                 print(f"  CONTAINS {keyword}")
+
+        for keyword in ["piaoExport", "/api/piao/export", "/api/piaos"]:
+            for match in list(re.finditer(re.escape(keyword), text))[:10]:
+                pos = match.start()
+                snippet = text[max(0, pos - 500) : min(len(text), pos + 1000)]
+                snippet = re.sub(r"\\s+", " ", snippet)
+                print(f"  KEYWORD_SNIPPET {keyword} {snippet}")
 
         # Also surface short string literals around '/api/' even if minification
         # prevents the stricter regex from capturing them.
@@ -58,3 +65,46 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
+def probe_api() -> None:
+    session = requests.Session()
+    session.headers.update(
+        {
+            "User-Agent": (
+                "Mozilla/5.0 (compatible; SegnaliLocaliDiTrasparenza/0.2; "
+                "+https://github.com/colazeta/segnali_locali_di_trasparenza)"
+            )
+        }
+    )
+    probes = [
+        ("https://portale-piao.dfp.gov.it/api/piaos", {"search": "", "limit": "5"}),
+        ("https://portale-piao.dfp.gov.it/api/piao/export", {}),
+        ("https://portale-piao.dfp.gov.it/api/piao/export", {"years": "2026"}),
+        ("https://portale-piao.dfp.gov.it/api/piao/export", {"years": "2025"}),
+        ("https://portale-piao.dfp.gov.it/api/piao/export", {"years": "2026-2028"}),
+        ("https://portale-piao.dfp.gov.it/api/piao/export", [("years", "2025"), ("years", "2026")]),
+    ]
+    for url, params in probes:
+        try:
+            response = session.get(url, params=params, timeout=60)
+        except requests.RequestException as exc:
+            print(f"PROBE error={type(exc).__name__} url={url} params={params}")
+            continue
+        print(
+            "PROBE "
+            f"status={response.status_code} "
+            f"type={response.headers.get('content-type')} "
+            f"disposition={response.headers.get('content-disposition')} "
+            f"bytes={len(response.content)} "
+            f"url={response.url}"
+        )
+        prefix = response.content[:500]
+        try:
+            print(f"  PREFIX {prefix.decode('utf-8', errors='replace')!r}")
+        except Exception:
+            print(f"  PREFIX_BYTES {prefix[:80]!r}")
+
+
+if __name__ == "__main__":
+    probe_api()
