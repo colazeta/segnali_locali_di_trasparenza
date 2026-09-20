@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import pandas as pd
+
 from segnali_locali_di_trasparenza.transparency import (
+    deterministic_region_sample,
     extract_candidates,
     normalise_start_url,
     page_looks_like_transparency,
@@ -55,3 +58,24 @@ def test_page_confirmation_uses_heading_or_url() -> None:
         "<html><h1>Albo pretorio</h1></html>",
         "https://example.it/albo",
     )
+
+
+def test_region_sample_is_stable_and_balanced() -> None:
+    frame = pd.DataFrame(
+        [
+            {"istat_code": "001001", "region_code": "01"},
+            {"istat_code": "001002", "region_code": "01"},
+            {"istat_code": "001003", "region_code": "01"},
+            {"istat_code": "002001", "region_code": "02"},
+            {"istat_code": "002002", "region_code": "02"},
+            {"istat_code": "002003", "region_code": "02"},
+        ]
+    )
+
+    first = deterministic_region_sample(frame, 2)
+    second = deterministic_region_sample(frame.sample(frac=1, random_state=7), 2)
+
+    assert first[["region_code", "istat_code"]].to_dict("records") == second[
+        ["region_code", "istat_code"]
+    ].to_dict("records")
+    assert first.groupby("region_code").size().to_dict() == {"01": 2, "02": 2}
