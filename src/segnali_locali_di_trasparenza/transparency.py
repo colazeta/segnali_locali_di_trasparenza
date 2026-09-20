@@ -152,6 +152,34 @@ def deterministic_region_sample(frame: pd.DataFrame, per_region: int) -> pd.Data
     )
 
 
+def deterministic_shard(
+    frame: pd.DataFrame,
+    *,
+    shard_index: int,
+    shard_count: int,
+) -> pd.DataFrame:
+    """Partition municipalities deterministically for bounded parallel collection."""
+    if shard_count <= 0:
+        raise ValueError("shard_count must be greater than zero")
+    if shard_index < 0 or shard_index >= shard_count:
+        raise ValueError("shard_index must be in [0, shard_count)")
+
+    working = frame.copy()
+    working["_shard"] = working["istat_code"].map(
+        lambda code: int(
+            hashlib.sha256(str(code).encode("utf-8")).hexdigest(),
+            16,
+        )
+        % shard_count
+    )
+    return (
+        working.loc[working["_shard"].eq(shard_index)]
+        .drop(columns=["_shard"])
+        .sort_values(["region_code", "istat_code"])
+        .reset_index(drop=True)
+    )
+
+
 class PoliteClient:
     def __init__(
         self,
