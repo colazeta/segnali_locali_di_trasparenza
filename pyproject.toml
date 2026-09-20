@@ -1,0 +1,29 @@
+[project]
+name = "segnali-locali-di-trasparenza"
+version = "0.1.0"
+description = "Monitor nazionale di segnali osservabili di trasparenza nei comuni italiani"
+requires-python = ">=3.11"
+dependencies = [
+  "pandas>=2.2",
+  "openpyxl>=3.1",
+  "requests>=2.32",
+  "urllib3>=2.2",
+  "beautifulsoup4>=4.12",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "ruff>=0.6",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+ignore = ["I001"]

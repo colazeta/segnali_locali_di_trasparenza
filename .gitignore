@@ -1,0 +1,18 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Generated/downloaded data are workflow artifacts unless deliberately promoted.
+data/raw/
+data/processed/
+data/lineage/
+data/observations/
+data/manifests/
+
+# Local/editor files
+.DS_Store
+.vscode/
+.idea/
