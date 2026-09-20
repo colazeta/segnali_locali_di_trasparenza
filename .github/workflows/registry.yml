@@ -125,7 +125,9 @@ jobs:
           python scripts/discover_transparency.py \
             --registry data/processed/municipalities.csv \
             --istat-codes 021014 021053 022250 058091 079160 \
-            --delay 0.5 \\\n            --timeout 8 \\\n            --retries 1
+            --delay 0.5 \
+            --timeout 8 \
+            --retries 1
 
       - name: Upload pilot observations
         uses: actions/upload-artifact@v4
