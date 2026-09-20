@@ -13,6 +13,7 @@ from segnali_locali_di_trasparenza.transparency import (
     DiscoveryResult,
     PoliteClient,
     deterministic_region_sample,
+    deterministic_shard,
     discover_transparency,
 )
 
@@ -60,6 +61,8 @@ def main() -> None:
         type=int,
         help="Deterministic technical sample of N municipalities per region",
     )
+    parser.add_argument("--shard-index", type=int)
+    parser.add_argument("--shard-count", type=int)
     parser.add_argument("--offset", type=int, default=0)
     parser.add_argument("--limit", type=int)
     parser.add_argument("--resume", action="store_true")
@@ -80,14 +83,23 @@ def main() -> None:
     registry = pd.read_csv(args.registry, dtype=str).fillna("")
     registry["istat_code"] = registry["istat_code"].astype(str).str.zfill(6)
 
-    if args.istat_codes and args.sample_per_region:
-        parser.error("--istat-codes and --sample-per-region are mutually exclusive")
+    shard_requested = args.shard_index is not None or args.shard_count is not None
+    if shard_requested and (args.shard_index is None or args.shard_count is None):
+        parser.error("--shard-index and --shard-count must be provided together")
+    if sum(bool(value) for value in [args.istat_codes, args.sample_per_region, shard_requested]) > 1:
+        parser.error("--istat-codes, --sample-per-region and sharding are mutually exclusive")
 
     if args.istat_codes:
         requested = {str(code).zfill(6) for code in args.istat_codes}
         registry = registry[registry["istat_code"].isin(requested)]
     elif args.sample_per_region:
         registry = deterministic_region_sample(registry, args.sample_per_region)
+    elif shard_requested:
+        registry = deterministic_shard(
+            registry,
+            shard_index=args.shard_index,
+            shard_count=args.shard_count,
+        )
 
     registry = registry.iloc[args.offset :]
     if args.limit is not None:
