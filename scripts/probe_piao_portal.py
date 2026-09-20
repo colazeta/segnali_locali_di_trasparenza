@@ -137,6 +137,73 @@ def main() -> None:
             tag.get("src", "")
             for tag in public_soup.find_all("script", src=True)
         ]
+        public_catalog["forms"] = [
+            {
+                "action": form.get("action", ""),
+                "method": form.get("method", ""),
+                "id": form.get("id", ""),
+                "class": form.get("class", []),
+                "inputs": [
+                    {
+                        "name": field.get("name", ""),
+                        "type": field.get("type", ""),
+                        "value": field.get("value", ""),
+                    }
+                    for field in form.find_all(["input", "select"])
+                ],
+            }
+            for form in public_soup.find_all("form")
+        ]
+        public_catalog["data_views"] = [
+            {
+                key: value
+                for key, value in tag.attrs.items()
+                if str(key).startswith("data-") or key in {"id", "class"}
+            }
+            for tag in public_soup.find_all(True)
+            if any(
+                "view" in str(value).lower()
+                for key, value in tag.attrs.items()
+                if str(key).startswith("data-") or key in {"id", "class"}
+            )
+        ][:50]
+
+        public_script_contexts = []
+        for src in public_catalog["scripts"]:
+            if not src:
+                continue
+            script_url = urljoin(public_response.url, src)
+            if "piao.dfp.gov.it" not in script_url:
+                continue
+            try:
+                script_response = session.get(script_url, timeout=60)
+                script_response.raise_for_status()
+            except requests.RequestException:
+                continue
+            script_text = script_response.text
+            for needle in [
+                "/views/ajax",
+                "views/ajax",
+                "view_name",
+                "view_display_id",
+                "drupalSettings",
+                "/piao",
+                "PIAO",
+            ]:
+                start = 0
+                while True:
+                    index = script_text.find(needle, start)
+                    if index < 0:
+                        break
+                    public_script_contexts.append(
+                        {
+                            "script": script_url,
+                            "needle": needle,
+                            "context": script_text[max(0, index - 700) : index + 1400],
+                        }
+                    )
+                    start = index + len(needle)
+        public_catalog["script_contexts"] = public_script_contexts[:100]
         public_catalog["links"] = [
             tag.get("href", "")
             for tag in public_soup.find_all("a", href=True)
