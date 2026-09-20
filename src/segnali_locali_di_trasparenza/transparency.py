@@ -11,6 +11,8 @@ from urllib.robotparser import RobotFileParser
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 
 USER_AGENT = (
@@ -47,7 +49,7 @@ class DiscoveryResult:
     status: str
     collector: str = "transparency_entrypoint"
     collector_version: str = ""
-    methodology_version: str = "signal001-v1"
+    methodology_version: str = "signal001-v2"
     homepage_final_url: str = ""
     homepage_http_status: int | None = None
     homepage_robots_status: str = ""
@@ -187,12 +189,30 @@ class PoliteClient:
         session: requests.Session | None = None,
         delay_seconds: float = 0.35,
         timeout_seconds: float = 20,
+        retry_total: int = 2,
+        retry_backoff_factor: float = 0.75,
     ) -> None:
         self.session = session or requests.Session()
         self.delay_seconds = max(delay_seconds, 0)
         self.timeout_seconds = timeout_seconds
         self._last_request_at = 0.0
         self._robots_cache: dict[str, tuple[RobotFileParser | None, str]] = {}
+
+        retry = Retry(
+            total=retry_total,
+            connect=retry_total,
+            read=retry_total,
+            status=retry_total,
+            allowed_methods=frozenset({"GET"}),
+            status_forcelist=(429, 500, 502, 503, 504),
+            backoff_factor=retry_backoff_factor,
+            respect_retry_after_header=True,
+            raise_on_status=False,
+        )
+        adapter = HTTPAdapter(max_retries=retry)
+        self.session.mount("https://", adapter)
+        self.session.mount("http://", adapter)
+
         self.session.headers.update(
             {
                 "User-Agent": USER_AGENT,
@@ -254,7 +274,7 @@ def discover_transparency(
     municipality_name: str,
     institutional_url: str,
     collector_version: str = "",
-    methodology_version: str = "signal001-v1",
+    methodology_version: str = "signal001-v2",
     client: PoliteClient | None = None,
     max_link_candidates: int = 4,
 ) -> DiscoveryResult:
