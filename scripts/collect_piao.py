@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pandas as pd
+import requests
 
 from segnali_locali_di_trasparenza.piao import (
     PiaoApiError,
@@ -197,7 +198,7 @@ def main() -> None:
                 timeout=args.timeout,
                 delay_seconds=args.delay,
             )
-        except (PiaoApiError, OSError, ValueError) as exc:
+        except (PiaoApiError, requests.RequestException, OSError, ValueError) as exc:
             append_row(
                 status_path,
                 status_row(
