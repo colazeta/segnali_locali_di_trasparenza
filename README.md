@@ -89,6 +89,7 @@ python scripts/collect_piao.py --registry data/processed/municipalities.csv
 ## Documentazione
 
 - [PIAO source and API](docs/PIAO_SOURCE.md)
+- [PIAO collection architecture](docs/PIAO_COLLECTION_ARCHITECTURE.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Data model](docs/DATA_MODEL.md)
 - [Municipality lineage](docs/LINEAGE.md)
