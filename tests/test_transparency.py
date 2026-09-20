@@ -3,6 +3,7 @@ from __future__ import annotations
 import pandas as pd
 
 from segnali_locali_di_trasparenza.transparency import (
+    PoliteClient,
     deterministic_region_sample,
     deterministic_shard,
     extract_candidates,
@@ -105,3 +106,16 @@ def test_deterministic_shards_are_stable_disjoint_and_complete() -> None:
         shard_index=2,
         shard_count=4,
     )["istat_code"].tolist()
+
+
+def test_polite_client_configures_bounded_get_retries() -> None:
+    client = PoliteClient(retry_total=3, retry_backoff_factor=0.25)
+    retries = client.session.get_adapter("https://").max_retries
+
+    assert retries.total == 3
+    assert retries.connect == 3
+    assert retries.read == 3
+    assert retries.status == 3
+    assert retries.allowed_methods == frozenset({"GET"})
+    assert 429 in retries.status_forcelist
+    assert 503 in retries.status_forcelist
