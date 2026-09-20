@@ -142,7 +142,7 @@ def deterministic_region_sample(frame: pd.DataFrame, per_region: int) -> pd.Data
     )
 
     for _, group in working.groupby("region_code", sort=True):
-        sampled.append(group.nsmallest(min(per_region, len(group)), "_sample_key"))
+        sampled.append(group.sort_values("_sample_key").head(min(per_region, len(group))))
 
     return (
         pd.concat(sampled, ignore_index=True)
