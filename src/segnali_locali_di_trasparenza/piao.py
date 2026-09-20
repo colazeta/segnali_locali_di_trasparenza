@@ -230,6 +230,8 @@ def fetch_publications_for_ipa(
     session = session or make_session()
     records: list[dict[str, Any]] = []
     total = 0
+    raw_records_seen = 0
+    requested_key = ipa_code.casefold()
 
     for page in range(max_pages):
         page_records, total, _ = _request_page(
@@ -238,9 +240,19 @@ def fetch_publications_for_ipa(
             page=page,
             timeout=timeout,
         )
-        records.extend(page_records)
+        raw_records_seen += len(page_records)
 
-        if not page_records or len(records) >= total:
+        # The public endpoint can behave as a prefix search for short IPA codes.
+        # Only records whose returned administrationIpaCode exactly matches the
+        # requested code belong to this municipality.
+        records.extend(
+            record
+            for record in page_records
+            if str(record.get("administrationIpaCode") or "").casefold().strip()
+            == requested_key
+        )
+
+        if not page_records or raw_records_seen >= total:
             break
 
         if delay_seconds > 0:
