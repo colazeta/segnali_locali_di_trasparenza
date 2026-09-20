@@ -37,7 +37,7 @@ jobs:
             --status-output data/piao/pilot-status.csv \
             --publications-output data/piao/pilot-publications.csv \
             --istat-codes 001168 015146 021014 058091 079160 \
-            --current-reference-year 2026 \
+            --target-start-year 2026 \
             --delay 0.35
 
       - name: Upload pilot
