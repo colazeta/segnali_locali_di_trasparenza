@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from segnali_locali_di_trasparenza.registry import (
@@ -63,7 +63,7 @@ def main() -> None:
     registry.to_json(jsonl_path, orient="records", lines=True, force_ascii=False)
 
     manifest = {
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
         "sources": {
             "istat": ISTAT_URL,
             "ipa": IPA_URL,
