@@ -207,3 +207,47 @@ def test_expected_catalogue_pages() -> None:
     assert expected_catalogue_pages(6, 6) == 1
     assert expected_catalogue_pages(7, 6) == 2
     assert expected_catalogue_pages(31_147, 6) == 5_192
+
+
+
+class PrefixSearchSession:
+    def __init__(self) -> None:
+        exact = sample_record(version=1)
+        exact["administrationIpaCode"] = "c_b9"
+        exact["administrationName"] = "Comune Exact"
+
+        prefixed = sample_record(version=1)
+        prefixed["administrationIpaCode"] = "c_b900"
+        prefixed["administrationName"] = "Comune Prefix"
+        prefixed["content"]["piaoPDF"]["files"][0]["url"] = (
+            "https://portale-piao.dfp.gov.it/api/piao/document?f=prefix.pdf"
+        )
+
+        self.pages = {
+            0: {
+                "success": True,
+                "result": [
+                    {
+                        "list": [exact, prefixed],
+                        "count": 2,
+                        "total": 2,
+                    }
+                ],
+            }
+        }
+
+    def get(self, url: str, *, params: dict[str, Any], timeout: float) -> FakeResponse:
+        del url, timeout
+        return FakeResponse(self.pages[int(params["page"])])
+
+
+def test_per_ipa_lookup_rejects_prefix_matches() -> None:
+    records, total = fetch_publications_for_ipa(
+        "c_b9",
+        session=PrefixSearchSession(),  # type: ignore[arg-type]
+        delay_seconds=0,
+    )
+
+    assert total == 2
+    assert len(records) == 1
+    assert records[0]["administrationIpaCode"] == "c_b9"
