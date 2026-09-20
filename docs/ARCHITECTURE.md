@@ -1,157 +1,96 @@
 # Architecture
 
-## 1. Scope
+## Scope
 
-Segnali locali di trasparenza is a national monitoring system for observable transparency signals in Italian municipalities.
+The project monitors observable transparency signals for Italian municipalities while keeping territorial identity, public-body identity and observations separate.
 
-The system separates four concerns:
-
-1. **territorial identity** — what the municipality is at a given point in time;
-2. **public-body identity** — which IPA entity represents the municipality;
-3. **observations** — what was observed, when, where and with which evidence;
-4. **presentation** — public pages, maps, comparisons and exploratory views.
-
-The public UI must be reproducible from persisted project data. External APIs and MCP servers are enrichment inputs, not mandatory runtime dependencies.
-
-## 2. Source hierarchy
-
-### Tier 1 — canonical identity
-
-**ISTAT / SITUAS** is authoritative for current municipality codes, names and territorial changes.
-
-The current ISTAT municipality workbook is the canonical input for the current-state registry.
-
-### Tier 2 — public-body identity
-
-**IPA / AgID** supplies the administrative entity layer:
-
-- Codice IPA;
-- fiscal code;
-- entity name and category;
-- institutional website;
-- contact metadata;
-- update timestamp.
-
-Municipal entities are identified conservatively. IPA category L6 includes “Comuni e loro Consorzi e Associazioni”; therefore category + seat location alone is not a sufficient deterministic link.
-
-### Tier 3 — enrichment and cross-check
-
-**Cruscotto Italia / AgID** is used for enrichment and verification by ISTAT code.
-
-It is explicitly not a hard runtime dependency of the public site.
-
-## 3. Entity model
-
-A municipality is not modelled as one timeless row.
-
-The current milestone produces a **municipality version** identified by the current ISTAT code. The historical lineage layer will later connect versions created by:
-
-- code changes;
-- renamings;
-- province/UTS changes;
-- mergers;
-- incorporations;
-- suppressions.
-
-This distinction is particularly important after territorial recodings such as those affecting Sardinia in 2026.
-
-## 4. Processing layers
+The active processing chain is:
 
 ```
-official sources
+ISTAT / SITUAS
+      +
+IPA / AgID
       |
       v
-data/raw/                    ephemeral, not committed
+canonical municipality registry
       |
       v
-normalisation
-      |
-      +--> ISTAT current municipality versions
-      |
-      +--> IPA municipal-entity candidates
+Portale PIAO / Dipartimento Funzione Pubblica
       |
       v
-deterministic linkage
+PIAO plan records
       |
-      +--> matched
-      +--> ambiguous
-      +--> unmatched
+      +--> deterministic municipality linkage
       |
       v
-data/processed/
-      |
-      +--> municipalities.csv
-      +--> municipalities.jsonl
+municipality-level PIAO view
       |
       v
-future collectors
-      |
-      v
-transparency observations
-      |
-      v
-public site / API
+future public site / API
 ```
 
-## 5. Non-negotiable provenance fields
+## Source precedence
 
-Every future observation must contain at least:
+1. **ISTAT / SITUAS** — territorial identity and administrative history.
+2. **IPA / AgID** — public-body identity and Codice IPA.
+3. **Portale PIAO / Dipartimento della Funzione Pubblica** — primary source for Signal 001.
+4. **Cruscotto Italia / AgID** — optional enrichment and cross-check.
 
-- municipality identifier;
-- signal type;
-- observation timestamp;
-- source URL;
-- observed value/status;
-- evidence reference or evidence hash;
-- collector identifier;
-- collector version;
-- methodology version.
+The public UI must be reproducible from persisted project outputs rather than requiring live external calls.
 
-A derived indicator must retain links to the observations from which it was computed.
+## Signal 001
 
-## 6. Transparency signals
+The first active signal is **PIAO presence and metadata**.
 
-Signals are atomic observations, not scores.
+The atomic object is one Portale PIAO plan record. Multiple records can belong to the same municipality across different reference periods.
 
-Examples:
+The municipality-level state is derived from those records and includes presence, number of observed plans and latest observed plan metadata.
 
-- institutional website reachable;
-- HTTPS correctly configured;
-- “Amministrazione trasparente” entry point discovered;
-- required section reachable;
-- publication timestamp observed;
-- machine-readable file exposed;
-- broken link;
-- document stale according to a defined rule;
-- historical version still retrievable.
+## Provenance
 
-A synthetic score, if ever introduced, belongs to a later analytical layer and must be recomputable from versioned atomic observations.
+Every collected PIAO record retains:
 
-## 7. Failure policy
+- Portale PIAO node id and URL;
+- fetch timestamp;
+- source HTML hash;
+- administration name;
+- portal entity code where available;
+- reference period;
+- approval date;
+- explicit publication metadata when available;
+- PDF URL;
+- administration-site URL;
+- municipality linkage basis.
 
-The pipeline must prefer **unresolved** over silently wrong.
+## Publication semantics
 
-Examples:
+Approval and publication are distinct events.
 
-- multiple plausible IPA entities → `ambiguous`;
-- no deterministic IPA entity → `unmatched`;
-- unexpected source schema → fail the build;
-- duplicate current ISTAT code → fail the build;
-- external enrichment unavailable → preserve the canonical registry and mark enrichment unavailable.
+The field shown publicly as **Data Approvazione** is stored as `approval_date`.
 
-## 8. Planned milestones
+A portal publication timestamp is populated only when explicitly exposed by HTML metadata. It must never be inferred from the approval date.
+
+## Failure policy
+
+The pipeline prefers unresolved over silently wrong:
+
+- unknown/ambiguous municipality link → unmatched audit output;
+- missing publication metadata → empty field, not inferred value;
+- unexpected source structure → test/build failure where appropriate;
+- no observed PIAO → observational absence, not automatic legal non-compliance.
+
+## Milestones
 
 ### Milestone 0
-National municipality registry: ISTAT + IPA + provenance.
+National municipality registry and administrative lineage.
 
 ### Milestone 1
-Discovery of the official institutional website and “Amministrazione trasparente” entry point.
+PIAO corpus and municipality-level PIAO presence/metadata.
 
 ### Milestone 2
-Availability and structural integrity of transparency sections.
+Temporal monitoring of new PIAO publications and changes.
 
 ### Milestone 3
-Temporal monitoring, change detection and evidence snapshots.
+Public municipality pages, search and comparative views.
 
-### Milestone 4
-Public municipality pages, search, map and comparative exploration.
+Additional transparency signals may be introduced only as separate, explicitly defined datasets.
