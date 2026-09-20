@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from segnali_locali_di_trasparenza.piao import (
+    expected_catalogue_pages,
     fetch_public_catalogue,
     fetch_publications_for_ipa,
     normalise_publication,
@@ -188,6 +189,9 @@ def test_fetch_public_catalogue_filters_after_full_completeness_check() -> None:
     assert {record["administrationIpaCode"] for record in records} == {"c_m208"}
     assert metadata == {
         "pages_fetched": 2,
+        "expected_pages": 2,
+        "page_size": 2,
+        "workers": 1,
         "first_total": 3,
         "last_total": 3,
         "unique_catalogue_records_seen": 3,
@@ -195,3 +199,11 @@ def test_fetch_public_catalogue_filters_after_full_completeness_check() -> None:
         "filtered_out_records": 1,
     }
     assert session.params == [{"page": 0}, {"page": 1}]
+
+
+
+def test_expected_catalogue_pages() -> None:
+    assert expected_catalogue_pages(0, 0) == 1
+    assert expected_catalogue_pages(6, 6) == 1
+    assert expected_catalogue_pages(7, 6) == 2
+    assert expected_catalogue_pages(31_147, 6) == 5_192
