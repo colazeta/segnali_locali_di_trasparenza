@@ -8,7 +8,7 @@ import requests
 from bs4 import BeautifulSoup
 
 BASE_URL = "https://portale-piao.dfp.gov.it/"
-LOOSE_API_RE = re.compile(r"/api/piao/[A-Za-z0-9_?&=./{}:$-]+")
+LOOSE_API_RE = re.compile(r"/api/[A-Za-z0-9_?&=./{}:$-]+")
 
 
 def main() -> None:
@@ -57,6 +57,28 @@ def main() -> None:
                     }
                 )
                 start = index + len(endpoint)
+        for needle in [
+            "Access token missing in cookies",
+            "accessToken",
+            "access_token",
+            "GUEST",
+            "getBackendInfo",
+            "piaos:{path",
+            "document.cookie",
+            "credentials",
+        ]:
+            start = 0
+            while True:
+                index = text.find(needle, start)
+                if index < 0:
+                    break
+                contexts.append(
+                    {
+                        "needle": needle,
+                        "context": text[max(0, index - 1200) : index + 2200],
+                    }
+                )
+                start = index + len(needle)
         if contexts:
             item["contexts"] = contexts
         bundles.append(item)
@@ -86,6 +108,7 @@ def main() -> None:
         "script_count": len(script_urls),
         "bundles": bundles,
         "api_endpoints": sorted(endpoints),
+        "root_cookies": session.cookies.get_dict(),
         "probes": probes,
     }
     print(json.dumps(result, ensure_ascii=False, indent=2))
