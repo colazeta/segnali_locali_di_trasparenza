@@ -83,6 +83,26 @@ def main() -> None:
             item["contexts"] = contexts
         bundles.append(item)
 
+    init_sequence = []
+    for path in [
+        "/api/getBackendInfo",
+        "/api/user",
+        "/api/administrations/details?search=Lamezia&limit=5",
+        "/api/administration?search=Lamezia&limit=5",
+        "/api/piaos?search=Lamezia&limit=5",
+    ]:
+        url = "https://portale-piao.dfp.gov.it" + path
+        step = {"url": url, "cookies_before": sorted(session.cookies.get_dict())}
+        try:
+            step_response = session.get(url, timeout=60)
+            step["status_code"] = step_response.status_code
+            step["content_type"] = step_response.headers.get("content-type", "")
+            step["sample"] = step_response.text[:3000]
+            step["cookies_after"] = sorted(session.cookies.get_dict())
+        except requests.RequestException as exc:
+            step["error"] = type(exc).__name__
+        init_sequence.append(step)
+
     probes = []
     for host in ["https://portale-piao.dfp.gov.it", "https://piao.dfp.gov.it"]:
         for path in [
@@ -108,7 +128,8 @@ def main() -> None:
         "script_count": len(script_urls),
         "bundles": bundles,
         "api_endpoints": sorted(endpoints),
-        "root_cookies": session.cookies.get_dict(),
+        "root_cookie_names": sorted(session.cookies.get_dict()),
+        "init_sequence": init_sequence,
         "probes": probes,
     }
     print(json.dumps(result, ensure_ascii=False, indent=2))
