@@ -3,8 +3,8 @@ from __future__ import annotations
 import hashlib
 import re
 import unicodedata
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable
 
 import pandas as pd
 import requests
@@ -58,9 +58,7 @@ def normalise_name(value: object) -> str:
 def clean_code(value: object, width: int | None = None) -> str:
     if pd.isna(value):
         return ""
-    text = str(value).strip()
-    if text.endswith(".0"):
-        text = text[:-2]
+    text = str(value).strip().removesuffix(".0")
     text = re.sub(r"\s+", "", text)
     if width and text.isdigit():
         return text.zfill(width)
@@ -119,8 +117,10 @@ def read_istat(path: Path) -> pd.DataFrame:
         "supra_name": _resolve_column(
             raw,
             [
-                "Denominazione dell'Unità territoriale sovracomunale "
-                "(valida a fini statistici)",
+                (
+                    "Denominazione dell'Unità territoriale sovracomunale "
+                    "(valida a fini statistici)"
+                ),
                 "Denominazione dell'Unità territoriale sovracomunale",
             ],
         ),
@@ -257,7 +257,7 @@ def link_ipa(istat: pd.DataFrame, ipa: pd.DataFrame) -> pd.DataFrame:
 
         row = municipality.drop(labels=["name_normalised"]).to_dict()
         row["ipa_match_status"] = status
-        row["ipa_candidate_count"] = int(len(candidates))
+        row["ipa_candidate_count"] = len(candidates)
 
         for field in [
             "ipa_code",
