@@ -26,9 +26,9 @@ STATUS_FIELDS = [
     "lookup_status",
     "piao_present_on_portal",
     "publication_count",
-    "current_reference_year",
-    "current_period_present",
-    "current_period_publication_count",
+    "target_start_year",
+    "period_starting_target_year_present",
+    "period_starting_target_year_publication_count",
     "latest_reference_period",
     "latest_reference_start_year",
     "latest_reference_end_year",
@@ -76,7 +76,7 @@ def status_row(
     *,
     registry_row: object,
     publications: list[dict[str, object]],
-    current_reference_year: int,
+    target_start_year: int,
     retrieved_at: str,
     lookup_status: str,
     error: str = "",
@@ -84,7 +84,7 @@ def status_row(
     current = [
         item
         for item in publications
-        if item.get("reference_start_year") == current_reference_year
+        if item.get("reference_start_year") == target_start_year
     ]
     latest = latest_publication(publications) or {}
 
@@ -95,9 +95,9 @@ def status_row(
         "lookup_status": lookup_status,
         "piao_present_on_portal": bool(publications),
         "publication_count": len(publications),
-        "current_reference_year": current_reference_year,
-        "current_period_present": bool(current),
-        "current_period_publication_count": len(current),
+        "target_start_year": target_start_year,
+        "period_starting_target_year_present": bool(current),
+        "period_starting_target_year_publication_count": len(current),
         "latest_reference_period": latest.get("reference_period", ""),
         "latest_reference_start_year": latest.get("reference_start_year", ""),
         "latest_reference_end_year": latest.get("reference_end_year", ""),
@@ -130,7 +130,7 @@ def main() -> None:
     parser.add_argument("--timeout", type=float, default=20)
     parser.add_argument("--retries", type=int, default=2)
     parser.add_argument(
-        "--current-reference-year",
+        "--target-start-year",
         type=int,
         default=datetime.now(UTC).year,
     )
@@ -182,7 +182,7 @@ def main() -> None:
                 status_row(
                     registry_row=municipality,
                     publications=[],
-                    current_reference_year=args.current_reference_year,
+                    target_start_year=args.target_start_year,
                     retrieved_at=retrieved_at,
                     lookup_status="missing_ipa_code",
                     error="registry_has_no_ipa_code",
@@ -205,7 +205,7 @@ def main() -> None:
                 status_row(
                     registry_row=municipality,
                     publications=[],
-                    current_reference_year=args.current_reference_year,
+                    target_start_year=args.target_start_year,
                     retrieved_at=retrieved_at,
                     lookup_status="error",
                     error=f"{type(exc).__name__}: {exc}",
@@ -245,7 +245,7 @@ def main() -> None:
             status_row(
                 registry_row=municipality,
                 publications=publications,
-                current_reference_year=args.current_reference_year,
+                target_start_year=args.target_start_year,
                 retrieved_at=retrieved_at,
                 lookup_status=lookup_status,
             ),
