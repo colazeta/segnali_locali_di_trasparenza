@@ -21,6 +21,10 @@ IPA_URL = (
 )
 
 MUNICIPALITY_IPA_CATEGORY = "L6"
+MUNICIPAL_PREFIX_RE = re.compile(
+    r"^\s*(?:comune(?:\s+di)?|gemeinde|comun(?:\s+de)?|municipio)\b\s*",
+    flags=re.IGNORECASE,
+)
 
 
 def download(url: str, destination: Path, timeout: int = 90) -> str:
@@ -48,11 +52,24 @@ def normalise_name(value: object) -> str:
         return ""
     text = unicodedata.normalize("NFKD", str(value))
     text = "".join(ch for ch in text if not unicodedata.combining(ch))
-    text = text.lower()
-    text = re.sub(r"\bcomune\s+di\b", " ", text)
-    text = re.sub(r"\bcomune\b", " ", text)
+    text = MUNICIPAL_PREFIX_RE.sub("", text.lower())
     text = re.sub(r"[^a-z0-9]+", " ", text)
     return re.sub(r"\s+", " ", text).strip()
+
+
+def name_aliases(*values: object) -> set[str]:
+    """Build deterministic aliases from official multilingual municipality names."""
+    aliases: set[str] = set()
+    for value in values:
+        if pd.isna(value) or not str(value).strip():
+            continue
+        text = str(value).strip()
+        pieces = [text, *re.split(r"\s*(?:/|\||;| – | - )\s*", text)]
+        for piece in pieces:
+            normalised = normalise_name(piece)
+            if normalised:
+                aliases.add(normalised)
+    return aliases
 
 
 def clean_code(value: object, width: int | None = None) -> str:
@@ -77,7 +94,6 @@ def _resolve_column(
         if key in lookup:
             return lookup[key]
 
-    # A controlled contains fallback absorbs harmless wording/line-break changes.
     for alias in aliases:
         key = normalise_header(alias)
         matches = [original for normalised, original in lookup.items() if key in normalised]
@@ -101,9 +117,16 @@ def read_istat(path: Path) -> pd.DataFrame:
             raw,
             ["Codice Comune formato alfanumerico", "Codice Comune formato numerico"],
         ),
-        "name": _resolve_column(
+        "name": _resolve_column(raw, ["Denominazione in italiano"]),
+        "name_full": _resolve_column(
             raw,
-            ["Denominazione in italiano", "Denominazione (Italiana e straniera)"],
+            ["Denominazione (Italiana e straniera)"],
+            required=False,
+        ),
+        "name_other": _resolve_column(
+            raw,
+            ["Denominazione altra lingua"],
+            required=False,
         ),
         "region_code": _resolve_column(raw, ["Codice Regione"]),
         "region_name": _resolve_column(raw, ["Denominazione Regione"]),
@@ -134,6 +157,13 @@ def read_istat(path: Path) -> pd.DataFrame:
     )
     out["istat_code"] = raw[columns["istat_code"]].map(lambda value: clean_code(value, 6))
     out["name"] = raw[columns["name"]].astype("string").str.strip()
+
+    for target in ["name_full", "name_other"]:
+        source = columns[target]
+        out[target] = (
+            raw[source].fillna("").astype(str).str.strip() if source else ""
+        )
+
     out["region_code"] = raw[columns["region_code"]].map(lambda value: clean_code(value, 2))
     out["region_name"] = raw[columns["region_name"]].astype("string").str.strip()
     out["supra_code"] = raw[columns["supra_code"]].map(lambda value: clean_code(value, 3))
@@ -193,11 +223,28 @@ def read_ipa(path: Path) -> pd.DataFrame:
     out["seat_cadastral_code"] = out["seat_cadastral_code"].str.upper()
     out["ipa_category"] = out["ipa_category"].str.upper()
     out["ipa_name_normalised"] = out["ipa_name"].map(normalise_name)
+    out["looks_like_municipality"] = out["ipa_name"].str.match(MUNICIPAL_PREFIX_RE, na=False)
 
     return out.reset_index(drop=True)
 
 
-def _municipality_ipa_candidates(
+def _official_aliases(
+    municipality: pd.Series,
+    curated_aliases: dict[str, list[str]] | None,
+) -> set[str]:
+    aliases = name_aliases(
+        municipality.get("name", ""),
+        municipality.get("name_full", ""),
+        municipality.get("name_other", ""),
+    )
+    if curated_aliases:
+        aliases.update(
+            name_aliases(*curated_aliases.get(str(municipality["istat_code"]), []))
+        )
+    return aliases
+
+
+def _location_candidates(
     municipality: pd.Series,
     ipa_municipal_entities: pd.DataFrame,
 ) -> pd.DataFrame:
@@ -205,58 +252,88 @@ def _municipality_ipa_candidates(
         ipa_municipal_entities["seat_istat_code"].eq(municipality["istat_code"])
     ].copy()
 
-    if candidates.empty and municipality["cadastral_code"]:
+    if candidates.empty and municipality.get("cadastral_code", ""):
         candidates = ipa_municipal_entities[
             ipa_municipal_entities["seat_cadastral_code"].eq(municipality["cadastral_code"])
         ].copy()
 
-    if candidates.empty:
-        return candidates
+    return candidates
 
-    target = municipality["name_normalised"]
-    candidates["name_exact"] = candidates["ipa_name_normalised"].eq(target)
+
+def _score_candidates(candidates: pd.DataFrame, aliases: set[str]) -> pd.DataFrame:
+    candidates = candidates.copy()
+    candidates["name_exact"] = candidates["ipa_name_normalised"].isin(aliases)
     candidates["name_contains"] = candidates["ipa_name_normalised"].map(
-        lambda candidate: bool(target) and (target in candidate or candidate in target)
-    )
-    candidates["looks_like_comune"] = candidates["ipa_name"].str.lower().str.match(
-        r"^\s*comune\b", na=False
+        lambda candidate: any(
+            alias and (alias in candidate or candidate in alias) for alias in aliases
+        )
     )
     return candidates
 
 
-def link_ipa(istat: pd.DataFrame, ipa: pd.DataFrame) -> pd.DataFrame:
+def link_ipa(
+    istat: pd.DataFrame,
+    ipa: pd.DataFrame,
+    *,
+    curated_aliases: dict[str, list[str]] | None = None,
+) -> pd.DataFrame:
     """
-    Deterministically link the current ISTAT municipality to its IPA entity.
+    Deterministically link current ISTAT municipalities to IPA entities.
 
-    IPA category L6 also contains consortia/associations, so location alone is not
-    sufficient. Ambiguous cases remain unresolved rather than being fuzzy-matched.
+    The linker uses current ISTAT/cadastral location, official multilingual names,
+    and narrowly curated aliases. If location metadata is missing in IPA, a unique
+    exact official-name match across category L6 is accepted. No fuzzy matching is
+    used.
     """
     municipal_entities = ipa[ipa["ipa_category"].eq(MUNICIPALITY_IPA_CATEGORY)].copy()
     rows: list[dict[str, object]] = []
 
     for _, municipality in istat.iterrows():
-        candidates = _municipality_ipa_candidates(municipality, municipal_entities)
+        aliases = _official_aliases(municipality, curated_aliases)
+        candidates = _score_candidates(
+            _location_candidates(municipality, municipal_entities),
+            aliases,
+        )
         selected = None
         status = "unmatched"
+        basis = ""
 
         if not candidates.empty:
-            exact = candidates[candidates["name_exact"] & candidates["looks_like_comune"]]
-            contains = candidates[candidates["name_contains"] & candidates["looks_like_comune"]]
+            exact = candidates[candidates["name_exact"]]
+            contains = candidates[
+                candidates["name_contains"] & candidates["looks_like_municipality"]
+            ]
 
             if len(exact) == 1:
                 selected = exact.iloc[0]
                 status = "matched_exact"
+                basis = "location+official_name"
             elif len(contains) == 1:
                 selected = contains.iloc[0]
                 status = "matched_contains"
-            elif len(candidates) == 1 and bool(candidates.iloc[0]["looks_like_comune"]):
+                basis = "location+official_name_contains"
+            elif len(candidates) == 1 and bool(
+                candidates.iloc[0]["looks_like_municipality"]
+            ):
                 selected = candidates.iloc[0]
                 status = "matched_unique_location"
+                basis = "unique_location"
             else:
                 status = "ambiguous"
+                basis = "multiple_location_candidates"
+        else:
+            global_exact = municipal_entities[
+                municipal_entities["ipa_name_normalised"].isin(aliases)
+            ]
+            if len(global_exact) == 1:
+                candidates = global_exact.copy()
+                selected = global_exact.iloc[0]
+                status = "matched_global_exact"
+                basis = "unique_official_name_global"
 
-        row = municipality.drop(labels=["name_normalised"]).to_dict()
+        row = municipality.drop(labels=["name_normalised"], errors="ignore").to_dict()
         row["ipa_match_status"] = status
+        row["ipa_match_basis"] = basis
         row["ipa_candidate_count"] = len(candidates)
 
         for field in [
