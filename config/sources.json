@@ -1,0 +1,28 @@
+{
+  "istat_municipalities": {
+    "role": "canonical_registry",
+    "authority": "ISTAT",
+    "url": "https://www.istat.it/storage/codici-unita-amministrative/Elenco-comuni-italiani.xlsx",
+    "format": "xlsx",
+    "refresh": "on_change",
+    "notes": "Permalink ufficiale; l'identità territoriale corrente prevale sulle fonti di enrichment."
+  },
+  "ipa_entities": {
+    "role": "public_body_registry",
+    "authority": "AgID / IPA",
+    "url": "https://indicepa.gov.it/ipa-dati/dataset/5baa3eb8-266e-455a-8de8-b1f434c279b2/resource/d09adf99-dc10-4349-8c53-27b1e5aa97b6/download/enti.xlsx",
+    "format": "xlsx",
+    "refresh": "daily",
+    "license": "CC BY 4.0",
+    "notes": "Dataset Enti. Il resource URL può cambiare: va verificato periodicamente contro il dataset IPA."
+  },
+  "cruscotto_italia": {
+    "role": "enrichment_and_cross_check",
+    "authority": "AgID",
+    "url": "https://cruscotto-italia-mcp.dati.gov.it/mcp",
+    "format": "mcp_json_rpc",
+    "refresh": "as_needed",
+    "runtime_dependency": false,
+    "notes": "Usare per enrichment e controlli; non rendere la UI dipendente dall'MCP in tempo reale."
+  }
+}
