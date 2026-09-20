@@ -1,0 +1,40 @@
+name: PIAO catalogue pagination probe
+
+on:
+  push:
+    branches:
+      - piao-monitoring
+    paths:
+      - ".github/PIAO_PROBE_RUN"
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Probe public catalogue pagination
+        run: |
+          python - <<'PY'
+          import requests
+          url = "https://piao.dfp.gov.it/api/piao"
+          for params in [
+              {"page": 0},
+              {"page": 0, "limit": 100},
+              {"page": 0, "limit": 500},
+          ]:
+              r = requests.get(url, params=params, timeout=30)
+              print("request", r.url, "status", r.status_code)
+              r.raise_for_status()
+              payload = r.json()["result"][0]
+              print({
+                  "params": params,
+                  "count": payload.get("count"),
+                  "total": payload.get("total"),
+                  "list_len": len(payload.get("list", [])),
+              })
+          PY
