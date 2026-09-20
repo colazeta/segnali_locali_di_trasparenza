@@ -11,7 +11,7 @@ on:
       - ".github/PIAO_BULK_RUN"
 
 concurrency:
-  group: bulk-national-piao-catalogue
+  group: bulk-national-piao-catalogue-v2
   cancel-in-progress: false
 
 permissions:
