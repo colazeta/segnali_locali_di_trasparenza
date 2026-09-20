@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Downloaded official source files
+data/raw/
+
+# Local/editor files
+.DS_Store
+.vscode/
+.idea/
