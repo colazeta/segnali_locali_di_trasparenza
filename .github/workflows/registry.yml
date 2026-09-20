@@ -100,38 +100,3 @@ jobs:
             data/manifests/municipality_lineage.json
           retention-days: 30
 
-  transparency-pilot:
-    runs-on: ubuntu-latest
-    needs: build-current-registry
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: pip
-
-      - name: Install
-        run: pip install -e .
-
-      - name: Download current municipality registry
-        uses: actions/download-artifact@v4
-        with:
-          name: municipality-registry
-          path: data
-
-      - name: Pilot transparency entry-point discovery
-        run: |
-          python scripts/discover_transparency.py \
-            --registry data/processed/municipalities.csv \
-            --istat-codes 021014 021053 022250 058091 079160 \
-            --delay 0.5 \
-            --timeout 8 \
-            --retries 1
-
-      - name: Upload pilot observations
-        uses: actions/upload-artifact@v4
-        with:
-          name: transparency-pilot
-          path: data/observations/
-          retention-days: 30
