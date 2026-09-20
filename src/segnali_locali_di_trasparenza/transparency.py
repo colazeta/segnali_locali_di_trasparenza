@@ -18,7 +18,7 @@ USER_AGENT = (
 )
 ROBOTS_USER_AGENT = "segnali-locali-di-trasparenza"
 TRANSPARENCY_RE = re.compile(
-    r"amministrazione\s*trasparente|trasparenza|transparenz",
+    r"amministrazione[\s/_-]*trasparente|trasparenza|transparenz",
     flags=re.IGNORECASE,
 )
 DEFAULT_FALLBACK_PATHS = (
