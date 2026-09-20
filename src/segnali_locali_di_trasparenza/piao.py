@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import urlencode
@@ -237,6 +240,16 @@ def fetch_publications_for_ipa(
     return list(deduplicated.values()), total
 
 
+def expected_catalogue_pages(total: int, page_size: int) -> int:
+    if total < 0:
+        raise ValueError("total must be non-negative")
+    if total == 0:
+        return 1
+    if page_size <= 0:
+        raise ValueError("page_size must be greater than zero when total is positive")
+    return math.ceil(total / page_size)
+
+
 def fetch_public_catalogue(
     *,
     session: requests.Session | None = None,
@@ -244,41 +257,101 @@ def fetch_public_catalogue(
     delay_seconds: float = 0.15,
     max_pages: int = 10000,
     keep_ipa_codes: set[str] | None = None,
+    workers: int = 1,
+    retries: int = 2,
 ) -> tuple[list[dict[str, Any]], dict[str, int]]:
     """
-    Fetch the anonymous national PIAO catalogue page by page.
+    Fetch the anonymous national PIAO catalogue and validate completeness.
 
-    When keep_ipa_codes is supplied, only records belonging to those IPA codes are
-    retained in the returned list, while completeness is still validated against
-    the full catalogue total reported by the official API.
+    Page 0 establishes the official total and page size. Remaining pages can then
+    be fetched with bounded parallelism. A custom session is supported only in
+    sequential mode, which keeps unit tests deterministic.
     """
-    session = session or make_session()
+    if workers <= 0:
+        raise ValueError("workers must be greater than zero")
+    if workers > 1 and session is not None:
+        raise ValueError("custom session is supported only with workers=1")
+
+    first_session = session or make_session(retries=retries)
     keep = {value.casefold().strip() for value in keep_ipa_codes or set() if value}
+
+    first_records, first_total, first_count = _request_page(
+        first_session,
+        page=0,
+        timeout=timeout,
+        ipa_code=None,
+    )
+    page_size = first_count or len(first_records)
+    expected_pages = expected_catalogue_pages(first_total, page_size)
+    if expected_pages > max_pages:
+        raise PiaoApiError(
+            "PIAO national catalogue exceeds configured max_pages: "
+            f"expected_pages={expected_pages}, max_pages={max_pages}"
+        )
+
+    pages: dict[int, list[dict[str, Any]]] = {0: first_records}
+    totals_seen: set[int] = {first_total}
+
+    if expected_pages > 1:
+        page_numbers = range(1, expected_pages)
+
+        if workers == 1:
+            for page in page_numbers:
+                if delay_seconds > 0:
+                    time.sleep(delay_seconds)
+                page_records, total, _ = _request_page(
+                    first_session,
+                    page=page,
+                    timeout=timeout,
+                    ipa_code=None,
+                )
+                pages[page] = page_records
+                totals_seen.add(total)
+        else:
+            local = threading.local()
+
+            def fetch_page(page: int) -> tuple[int, list[dict[str, Any]], int]:
+                if not hasattr(local, "session"):
+                    local.session = make_session(retries=retries)
+                if delay_seconds > 0:
+                    time.sleep(delay_seconds)
+                page_records, total, _ = _request_page(
+                    local.session,
+                    page=page,
+                    timeout=timeout,
+                    ipa_code=None,
+                )
+                return page, page_records, total
+
+            with ThreadPoolExecutor(max_workers=workers) as executor:
+                futures = {
+                    executor.submit(fetch_page, page): page
+                    for page in page_numbers
+                }
+                for future in as_completed(futures):
+                    page, page_records, total = future.result()
+                    pages[page] = page_records
+                    totals_seen.add(total)
+
+    if totals_seen != {first_total}:
+        raise PiaoApiError(
+            "PIAO catalogue total changed during collection; snapshot rejected: "
+            f"totals={sorted(totals_seen)}"
+        )
+
     selected: dict[str, dict[str, Any]] = {}
     all_seen: set[str] = set()
-    first_total: int | None = None
-    last_total = 0
-    pages_fetched = 0
 
-    for page in range(max_pages):
-        page_records, total, _ = _request_page(
-            session,
-            page=page,
-            timeout=timeout,
-            ipa_code=None,
-        )
-        pages_fetched += 1
-        if first_total is None:
-            first_total = total
-        last_total = total
+    for page in range(expected_pages):
+        page_records = pages.get(page)
+        if page_records is None:
+            raise PiaoApiError(f"PIAO catalogue page {page} was not fetched")
 
-        if not page_records:
-            if len(all_seen) < total:
-                raise PiaoApiError(
-                    "PIAO national catalogue ended before the advertised total: "
-                    f"unique_seen={len(all_seen)}, total={total}, page={page}"
-                )
-            break
+        if page < expected_pages - 1 and len(page_records) != page_size:
+            raise PiaoApiError(
+                "PIAO catalogue returned an incomplete non-final page: "
+                f"page={page}, records={len(page_records)}, expected={page_size}"
+            )
 
         for record in page_records:
             record_id = publication_id(record)
@@ -287,26 +360,19 @@ def fetch_public_catalogue(
             if not keep or ipa_code in keep:
                 selected[record_id] = record
 
-        if len(all_seen) >= total:
-            break
-
-        if delay_seconds > 0:
-            time.sleep(delay_seconds)
-    else:
-        raise PiaoApiError(
-            f"PIAO national catalogue exceeded max_pages={max_pages}"
-        )
-
-    if len(all_seen) < last_total:
+    if len(all_seen) != first_total:
         raise PiaoApiError(
             "PIAO national catalogue completeness validation failed: "
-            f"unique_seen={len(all_seen)}, final_total={last_total}"
+            f"unique_seen={len(all_seen)}, advertised_total={first_total}"
         )
 
     metadata = {
-        "pages_fetched": pages_fetched,
-        "first_total": int(first_total or 0),
-        "last_total": int(last_total),
+        "pages_fetched": len(pages),
+        "expected_pages": expected_pages,
+        "page_size": page_size,
+        "workers": workers,
+        "first_total": first_total,
+        "last_total": first_total,
         "unique_catalogue_records_seen": len(all_seen),
         "selected_records": len(selected),
         "filtered_out_records": max(0, len(all_seen) - len(selected)),
