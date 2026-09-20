@@ -159,13 +159,17 @@ def normalise_publication(record: dict[str, Any], *, retrieved_at: str) -> dict[
 def _request_page(
     session: requests.Session,
     *,
-    ipa_code: str,
     page: int,
     timeout: float,
+    ipa_code: str | None = None,
 ) -> tuple[list[dict[str, Any]], int, int]:
+    params: dict[str, object] = {"page": page}
+    if ipa_code:
+        params["ipaCode"] = ipa_code
+
     response = session.get(
         PUBLIC_PIAO_API,
-        params={"ipaCode": ipa_code, "page": page},
+        params=params,
         timeout=timeout,
     )
     response.raise_for_status()
@@ -231,6 +235,83 @@ def fetch_publications_for_ipa(
         deduplicated[publication_id(record)] = record
 
     return list(deduplicated.values()), total
+
+
+def fetch_public_catalogue(
+    *,
+    session: requests.Session | None = None,
+    timeout: float = 20,
+    delay_seconds: float = 0.15,
+    max_pages: int = 10000,
+    keep_ipa_codes: set[str] | None = None,
+) -> tuple[list[dict[str, Any]], dict[str, int]]:
+    """
+    Fetch the anonymous national PIAO catalogue page by page.
+
+    When keep_ipa_codes is supplied, only records belonging to those IPA codes are
+    retained in the returned list, while completeness is still validated against
+    the full catalogue total reported by the official API.
+    """
+    session = session or make_session()
+    keep = {value.casefold().strip() for value in keep_ipa_codes or set() if value}
+    selected: dict[str, dict[str, Any]] = {}
+    all_seen: set[str] = set()
+    first_total: int | None = None
+    last_total = 0
+    pages_fetched = 0
+
+    for page in range(max_pages):
+        page_records, total, _ = _request_page(
+            session,
+            page=page,
+            timeout=timeout,
+            ipa_code=None,
+        )
+        pages_fetched += 1
+        if first_total is None:
+            first_total = total
+        last_total = total
+
+        if not page_records:
+            if len(all_seen) < total:
+                raise PiaoApiError(
+                    "PIAO national catalogue ended before the advertised total: "
+                    f"unique_seen={len(all_seen)}, total={total}, page={page}"
+                )
+            break
+
+        for record in page_records:
+            record_id = publication_id(record)
+            all_seen.add(record_id)
+            ipa_code = str(record.get("administrationIpaCode") or "").casefold().strip()
+            if not keep or ipa_code in keep:
+                selected[record_id] = record
+
+        if len(all_seen) >= total:
+            break
+
+        if delay_seconds > 0:
+            time.sleep(delay_seconds)
+    else:
+        raise PiaoApiError(
+            f"PIAO national catalogue exceeded max_pages={max_pages}"
+        )
+
+    if len(all_seen) < last_total:
+        raise PiaoApiError(
+            "PIAO national catalogue completeness validation failed: "
+            f"unique_seen={len(all_seen)}, final_total={last_total}"
+        )
+
+    metadata = {
+        "pages_fetched": pages_fetched,
+        "first_total": int(first_total or 0),
+        "last_total": int(last_total),
+        "unique_catalogue_records_seen": len(all_seen),
+        "selected_records": len(selected),
+        "filtered_out_records": max(0, len(all_seen) - len(selected)),
+    }
+    return list(selected.values()), metadata
 
 
 def deterministic_shard(
