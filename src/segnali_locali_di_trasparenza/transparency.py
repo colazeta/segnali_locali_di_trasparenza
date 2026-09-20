@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from urllib.parse import urljoin, urlparse
 from urllib.robotparser import RobotFileParser
 
+import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 
@@ -127,6 +128,28 @@ def page_looks_like_transparency(html: str, url: str) -> bool:
     )
     probe = f"{title} {headings} {url}"
     return bool(TRANSPARENCY_RE.search(probe))
+
+
+def deterministic_region_sample(frame: pd.DataFrame, per_region: int) -> pd.DataFrame:
+    """Stable technical sample by region; not intended for statistical inference."""
+    if per_region <= 0:
+        raise ValueError("per_region must be greater than zero")
+
+    sampled: list[pd.DataFrame] = []
+    working = frame.copy()
+    working["_sample_key"] = working["istat_code"].map(
+        lambda code: hashlib.sha256(str(code).encode("utf-8")).hexdigest()
+    )
+
+    for _, group in working.groupby("region_code", sort=True):
+        sampled.append(group.nsmallest(min(per_region, len(group)), "_sample_key"))
+
+    return (
+        pd.concat(sampled, ignore_index=True)
+        .drop(columns=["_sample_key"])
+        .sort_values(["region_code", "istat_code"])
+        .reset_index(drop=True)
+    )
 
 
 class PoliteClient:
