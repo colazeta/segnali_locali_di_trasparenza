@@ -122,6 +122,31 @@ def main() -> None:
                 probe["error"] = type(exc).__name__
             probes.append(probe)
 
+    public_catalog = {}
+    try:
+        public_response = session.get("https://piao.dfp.gov.it/piao", timeout=60)
+        public_catalog["status_code"] = public_response.status_code
+        public_catalog["final_url"] = public_response.url
+        public_catalog["content_type"] = public_response.headers.get("content-type", "")
+        public_soup = BeautifulSoup(public_response.text, "html.parser")
+        public_catalog["iframes"] = [
+            {"src": tag.get("src", ""), "title": tag.get("title", "")}
+            for tag in public_soup.find_all("iframe")
+        ]
+        public_catalog["scripts"] = [
+            tag.get("src", "")
+            for tag in public_soup.find_all("script", src=True)
+        ]
+        public_catalog["links"] = [
+            tag.get("href", "")
+            for tag in public_soup.find_all("a", href=True)
+            if "piao" in str(tag.get("href", "")).lower()
+            or "portale" in str(tag.get("href", "")).lower()
+        ][:50]
+        public_catalog["html_sample"] = public_response.text[:10000]
+    except requests.RequestException as exc:
+        public_catalog["error"] = type(exc).__name__
+
     result = {
         "base_url": BASE_URL,
         "html_status_code": response.status_code,
@@ -131,6 +156,7 @@ def main() -> None:
         "root_cookie_names": sorted(session.cookies.get_dict()),
         "init_sequence": init_sequence,
         "probes": probes,
+        "public_catalog": public_catalog,
     }
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
