@@ -1,0 +1,22 @@
+name: probe PIAO public pagination
+
+on:
+  push:
+    branches:
+      - piao-monitoring
+    paths:
+      - ".github/PIAO_PAGINATION_PROBE"
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install requests
+      - run: python scripts/probe_piao_public_pagination.py
