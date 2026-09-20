@@ -10,7 +10,6 @@ import pandas as pd
 
 from segnali_locali_di_trasparenza.piao import (
     fetch_public_catalogue,
-    make_session,
     normalise_publication,
 )
 
@@ -194,6 +193,7 @@ def main() -> None:
     parser.add_argument("--timeout", type=float, default=20)
     parser.add_argument("--retries", type=int, default=2)
     parser.add_argument("--max-pages", type=int, default=10000)
+    parser.add_argument("--workers", type=int, default=4)
     args = parser.parse_args()
 
     registry = pd.read_csv(
@@ -213,14 +213,14 @@ def main() -> None:
             "Bulk PIAO collection requires one non-empty, unique IPA code per municipality"
         )
 
-    session = make_session(retries=args.retries)
     started_at = datetime.now(UTC).isoformat()
     raw_records, catalogue = fetch_public_catalogue(
-        session=session,
         timeout=args.timeout,
         delay_seconds=args.delay,
         max_pages=args.max_pages,
         keep_ipa_codes=ipa_codes,
+        workers=args.workers,
+        retries=args.retries,
     )
     retrieved_at = datetime.now(UTC).isoformat()
 
