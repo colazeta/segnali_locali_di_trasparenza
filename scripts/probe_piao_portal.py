@@ -61,12 +61,32 @@ def main() -> None:
             item["contexts"] = contexts
         bundles.append(item)
 
+    probes = []
+    for host in ["https://portale-piao.dfp.gov.it", "https://piao.dfp.gov.it"]:
+        for path in [
+            "/api/piaos?limit=3",
+            "/api/piao/schema?limit=3",
+            "/api/piao/export?years=2026-2028",
+        ]:
+            url = host + path
+            probe = {"url": url}
+            try:
+                probe_response = session.get(url, timeout=60)
+                probe["status_code"] = probe_response.status_code
+                probe["content_type"] = probe_response.headers.get("content-type", "")
+                probe["content_disposition"] = probe_response.headers.get("content-disposition", "")
+                probe["sample"] = probe_response.text[:2000]
+            except requests.RequestException as exc:
+                probe["error"] = type(exc).__name__
+            probes.append(probe)
+
     result = {
         "base_url": BASE_URL,
         "html_status_code": response.status_code,
         "script_count": len(script_urls),
         "bundles": bundles,
         "api_endpoints": sorted(endpoints),
+        "probes": probes,
     }
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
