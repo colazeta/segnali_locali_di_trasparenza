@@ -6,6 +6,7 @@ from segnali_locali_di_trasparenza.registry import (
     link_ipa,
     name_aliases,
     normalise_name,
+    read_istat,
     validate_registry,
 )
 
