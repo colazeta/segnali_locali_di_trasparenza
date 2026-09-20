@@ -1,11 +1,13 @@
-name: national transparency crawl
+name: national PIAO snapshot
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: "11 5 * * 1"
 
 concurrency:
-  group: national-transparency-crawl
-  cancel-in-progress: false
+  group: national-piao-snapshot
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -22,24 +24,29 @@ jobs:
           cache: pip
 
       - name: Install
-        run: pip install -e .
+        run: pip install -e ".[dev]"
 
-      - name: Build current municipality registry
+      - name: Validate code
+        run: |
+          pytest -q
+          ruff check .
+
+      - name: Build municipality registry
         run: python scripts/build_municipality_registry.py
 
       - name: Upload registry
         uses: actions/upload-artifact@v4
         with:
-          name: national-crawl-registry
+          name: piao-registry
           path: |
             data/processed/
             data/manifests/municipality_registry.json
           retention-days: 90
 
-  crawl:
+  collect-pages:
     needs: build-registry
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       max-parallel: 8
@@ -100,29 +107,29 @@ jobs:
       - name: Download registry
         uses: actions/download-artifact@v4
         with:
-          name: national-crawl-registry
+          name: piao-registry
           path: data
 
-      - name: Crawl shard
+      - name: Collect catalogue page shard
         run: |
-          python scripts/discover_transparency.py \
+          python scripts/collect_piao_catalogue_shard.py \
             --registry data/processed/municipalities.csv \
-            --output "data/observations/transparency-shard-${{ matrix.shard }}.csv" \
+            --output-dir data/piao-bulk-shards \
             --shard-index "${{ matrix.shard }}" \
             --shard-count 40 \
-            --delay 0.5 \
-            --timeout 8 \
-            --retries 1
+            --delay 0.10 \
+            --timeout 20 \
+            --retries 2
 
-      - name: Upload shard
+      - name: Upload page shard
         uses: actions/upload-artifact@v4
         with:
-          name: "transparency-shard-${{ matrix.shard }}"
-          path: "data/observations/transparency-shard-${{ matrix.shard }}.csv"
-          retention-days: 90
+          name: "piao-bulk-shard-${{ matrix.shard }}"
+          path: data/piao-bulk-shards/
+          retention-days: 30
 
   consolidate:
-    needs: crawl
+    needs: collect-pages
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -138,27 +145,39 @@ jobs:
       - name: Download registry
         uses: actions/download-artifact@v4
         with:
-          name: national-crawl-registry
+          name: piao-registry
           path: data
 
-      - name: Download shard observations
+      - name: Download all page shards
         uses: actions/download-artifact@v4
         with:
-          pattern: transparency-shard-*
-          path: data/shards
+          pattern: piao-bulk-shard-*
+          path: data/piao-bulk-shards
           merge-multiple: true
 
-      - name: Consolidate and validate national coverage
+      - name: Validate and consolidate national catalogue
         run: |
-          python scripts/consolidate_transparency.py \
+          python scripts/consolidate_piao_catalogue_shards.py \
             --registry data/processed/municipalities.csv \
-            --input-glob "data/shards/*.csv"
+            --index-glob "data/piao-bulk-shards/catalogue-index-*.csv" \
+            --publications-glob "data/piao-bulk-shards/publications-*.csv" \
+            --manifest-glob "data/piao-bulk-shards/manifest-*.json" \
+            --output-dir data/piao-national \
+            --expected-shards 40 \
+            --target-start-year 2026
 
-      - name: Upload national snapshot
+      - name: Build analytical coverage tables
+        run: |
+          python scripts/summarize_piao_coverage.py \
+            --registry data/processed/municipalities.csv \
+            --status data/piao-national/piao_status.csv \
+            --output-dir data/analysis
+
+      - name: Upload validated national snapshot
         uses: actions/upload-artifact@v4
         with:
-          name: transparency-national-snapshot
+          name: piao-national-snapshot
           path: |
-            data/observations/
-            data/manifests/transparency_snapshot.json
+            data/piao-national/
+            data/analysis/
           retention-days: 90

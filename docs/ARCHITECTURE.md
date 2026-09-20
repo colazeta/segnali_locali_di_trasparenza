@@ -1,157 +1,162 @@
 # Architecture
 
-## 1. Scope
+## 1. Current scope
 
-Segnali locali di trasparenza is a national monitoring system for observable transparency signals in Italian municipalities.
+The project currently monitors one observable only:
 
-The system separates four concerns:
+> PIAO publications associated with the 7,894 current Italian municipalities on the official Portale PIAO of the Dipartimento della Funzione Pubblica.
 
-1. **territorial identity** — what the municipality is at a given point in time;
-2. **public-body identity** — which IPA entity represents the municipality;
-3. **observations** — what was observed, when, where and with which evidence;
-4. **presentation** — public pages, maps, comparisons and exploratory views.
+No generic “Amministrazione trasparente” crawler and no synthetic transparency score are part of the active scope.
 
-The public UI must be reproducible from persisted project data. External APIs and MCP servers are enrichment inputs, not mandatory runtime dependencies.
+## 2. Identity backbone
 
-## 2. Source hierarchy
+### Municipality identity
 
-### Tier 1 — canonical identity
+**ISTAT / SITUAS** is authoritative for current territorial identity and administrative changes.
 
-**ISTAT / SITUAS** is authoritative for current municipality codes, names and territorial changes.
+### Public-body identity
 
-The current ISTAT municipality workbook is the canonical input for the current-state registry.
+**IPA / AgID** supplies the public-body identity layer, most importantly the **Codice IPA**.
 
-### Tier 2 — public-body identity
+The national registry currently links all 7,894 current municipalities deterministically to one IPA entity. This allows the PIAO source to be joined by identifier rather than by fuzzy administration-name matching.
 
-**IPA / AgID** supplies the administrative entity layer:
+## 3. PIAO primary source
 
+Primary source:
+
+- public catalogue: `https://piao.dfp.gov.it/piao`
+- public JSON endpoint used by the catalogue: `GET /api/piao`
+
+Two collection modes are maintained:
+
+1. **national catalogue ingestion** — primary production method;
+2. **per-IPA lookup** — validation and diagnostic fallback.
+
+The national method acquires the complete official catalogue, validates pagination completeness, filters records to the 7,894 municipal IPA codes and performs the municipality join locally.
+
+The per-IPA method queries:
+
+```
+GET /api/piao?ipaCode=<CODICE_IPA>&page=<N>
+```
+
+It is retained to validate the bulk result and investigate individual municipalities.
+
+## 4. Processing architecture
+
+```
+ISTAT / SITUAS --------+
+                       |
+IPA / AgID ------------+--> municipality registry
+                              7,894 current municipalities
+                              7,894 deterministic IPA links
+                                       |
+                                       v
+Portale PIAO national catalogue --> complete paginated snapshot
+                                       |
+                              pagination validation
+                                       |
+                              filter municipal IPA codes
+                                       |
+                                       v
+                               PIAO publications
+                              one row per publication
+                                       |
+                                       v
+                              municipality PIAO status
+                              exactly 7,894 rows
+                                       |
+                      +----------------+----------------+
+                      |                                 |
+                      v                                 v
+               analytical summaries              public website
+               national / region / area           municipality pages
+```
+
+## 5. Core outputs
+
+### Publication grain
+
+One row represents one PIAO version returned by the official source.
+
+The publication dataset preserves:
+
+- ISTAT municipality code;
 - Codice IPA;
-- fiscal code;
-- entity name and category;
-- institutional website;
-- contact metadata;
-- update timestamp.
+- portal administration name;
+- PIAO reference period;
+- reference-period start and end year;
+- version;
+- approval date;
+- approval-act reference;
+- approving authority;
+- PIAO document URL;
+- approval-act URL;
+- institutional PIAO URL when supplied;
+- attachments;
+- retrieval timestamp;
+- deterministic publication id.
 
-Municipal entities are identified conservatively. IPA category L6 includes “Comuni e loro Consorzi e Associazioni”; therefore category + seat location alone is not a sufficient deterministic link.
+### Municipality grain
 
-### Tier 3 — enrichment and cross-check
+Exactly one row per current municipality.
 
-**Cruscotto Italia / AgID** is used for enrichment and verification by ISTAT code.
+For a target cycle such as **2026–2028**, the municipality view records:
 
-It is explicitly not a hard runtime dependency of the public site.
+- whether any PIAO is observed on the portal;
+- total number of PIAO publications;
+- whether a PIAO whose reference period starts in 2026 is observed;
+- number of such publications/versions;
+- latest available reference period;
+- latest version;
+- latest approval date;
+- latest document URL;
+- retrieval status.
 
-## 3. Entity model
+## 6. Three analytical states
 
-A municipality is not modelled as one timeless row.
+For presentation and analysis, municipalities are classified into mutually exclusive states:
 
-The current milestone produces a **municipality version** identified by the current ISTAT code. The historical lineage layer will later connect versions created by:
+1. `target_period_present` — a PIAO 2026–2028 is observed;
+2. `prior_period_only` — one or more PIAOs are observed, but none starts in 2026;
+3. `no_piao_observed` — the official source returns no PIAO for that municipal IPA code;
+4. `lookup_error` — reserved for technical collection errors.
 
-- code changes;
-- renamings;
-- province/UTS changes;
-- mergers;
-- incorporations;
-- suppressions.
+The fourth state is operational rather than substantive. Technical failure must never be converted into “no PIAO”.
 
-This distinction is particularly important after territorial recodings such as those affecting Sardinia in 2026.
+## 7. Publication date semantics
 
-## 4. Processing layers
+Three dates must remain distinct:
 
-```
-official sources
-      |
-      v
-data/raw/                    ephemeral, not committed
-      |
-      v
-normalisation
-      |
-      +--> ISTAT current municipality versions
-      |
-      +--> IPA municipal-entity candidates
-      |
-      v
-deterministic linkage
-      |
-      +--> matched
-      +--> ambiguous
-      +--> unmatched
-      |
-      v
-data/processed/
-      |
-      +--> municipalities.csv
-      +--> municipalities.jsonl
-      |
-      v
-future collectors
-      |
-      v
-transparency observations
-      |
-      v
-public site / API
-```
+- **approval date** — explicitly exposed by the public PIAO API;
+- **portal publication date** — populated only if an authoritative public source exposes it;
+- **retrieved/first observed date** — when this monitor observed the record.
 
-## 5. Non-negotiable provenance fields
+The verified anonymous public API does not currently expose an authoritative historical portal-publication timestamp. Approval date must therefore never be relabelled as publication date.
 
-Every future observation must contain at least:
+## 8. Completeness controls
 
-- municipality identifier;
-- signal type;
-- observation timestamp;
-- source URL;
-- observed value/status;
-- evidence reference or evidence hash;
-- collector identifier;
-- collector version;
-- methodology version.
+A production snapshot is accepted only if:
 
-A derived indicator must retain links to the observations from which it was computed.
+- municipality registry rows = 7,894;
+- municipality status rows = 7,894;
+- no duplicate municipality ISTAT codes exist;
+- national catalogue page coverage is complete;
+- the collected catalogue row count matches the API-advertised total;
+- catalogue-total drift during collection is rejected;
+- per-IPA and bulk collection agree during validation.
 
-## 6. Transparency signals
+The project prefers a failed/incomplete run over silently classifying missing observations as absence.
 
-Signals are atomic observations, not scores.
+## 9. Refresh strategy
 
-Examples:
+The ordinary production refresh is a **weekly full catalogue acquisition**.
 
-- institutional website reachable;
-- HTTPS correctly configured;
-- “Amministrazione trasparente” entry point discovered;
-- required section reachable;
-- publication timestamp observed;
-- machine-readable file exposed;
-- broken link;
-- document stale according to a defined rule;
-- historical version still retrievable.
+Per-IPA queries are retained for:
 
-A synthetic score, if ever introduced, belongs to a later analytical layer and must be recomputable from versioned atomic observations.
+- spot checks;
+- diagnostic retries;
+- investigating mismatches;
+- validating changes to the bulk collector.
 
-## 7. Failure policy
-
-The pipeline must prefer **unresolved** over silently wrong.
-
-Examples:
-
-- multiple plausible IPA entities → `ambiguous`;
-- no deterministic IPA entity → `unmatched`;
-- unexpected source schema → fail the build;
-- duplicate current ISTAT code → fail the build;
-- external enrichment unavailable → preserve the canonical registry and mark enrichment unavailable.
-
-## 8. Planned milestones
-
-### Milestone 0
-National municipality registry: ISTAT + IPA + provenance.
-
-### Milestone 1
-Discovery of the official institutional website and “Amministrazione trasparente” entry point.
-
-### Milestone 2
-Availability and structural integrity of transparency sections.
-
-### Milestone 3
-Temporal monitoring, change detection and evidence snapshots.
-
-### Milestone 4
-Public municipality pages, search, map and comparative exploration.
+A future longitudinal layer may persist `first_observed_at` and `last_observed_at` for each deterministic PIAO publication id.
