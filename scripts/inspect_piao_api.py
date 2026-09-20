@@ -12,7 +12,7 @@ def main() -> None:
         print('API',ipa,r.status_code,r.url)
         try:
             data=r.json()
-        except Exception:
+        except requests.JSONDecodeError:
             print(r.text[:5000])
             continue
         print(json.dumps(data,ensure_ascii=False,indent=2)[:30000])
