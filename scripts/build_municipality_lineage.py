@@ -44,7 +44,6 @@ def main() -> None:
     client = SituasClient()
     catalog = client.catalog()
 
-    variation_entry = client.report_entry(VARIATIONS_REPORT, catalog=catalog)
     translation_entry = client.report_entry(TRANSLATION_REPORT, catalog=catalog)
 
     variation_request, variations = client.report(
