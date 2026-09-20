@@ -161,3 +161,47 @@ def inspect_public_catalogue() -> None:
 
 if __name__ == "__main__":
     inspect_public_catalogue()
+
+
+def inspect_public_catalogue_embeds() -> None:
+    session = requests.Session()
+    session.headers.update({"User-Agent": "Mozilla/5.0"})
+    response = session.get("https://piao.dfp.gov.it/piao", timeout=30)
+    response.raise_for_status()
+    html = response.text
+
+    for pattern in [
+        r"portale-piao[^\"'<> ]*",
+        r"<iframe[^>]*>",
+        r"<form[^>]*>",
+        r"<div[^>]*(?:piao|search|plan)[^>]*>",
+        r"<input[^>]*>",
+        r"<select[^>]*>",
+        r"drupalSettings",
+    ]:
+        matches = re.findall(pattern, html, flags=re.IGNORECASE)
+        print(f"EMBED_PATTERN {pattern} count={len(matches)}")
+        for value in matches[:100]:
+            print(f"  EMBED {re.sub(r'\\s+', ' ', value)}")
+
+    for src in SCRIPT_RE.findall(html):
+        url = urljoin(response.url, src)
+        if not url.startswith("https://piao.dfp.gov.it/"):
+            continue
+        js = session.get(url, timeout=30)
+        print(f"PUBLIC_JS status={js.status_code} url={url} bytes={len(js.content)}")
+        if js.status_code >= 400:
+            continue
+        text = js.text
+        for keyword in ["portale-piao", "/api/", "iframe", "piao"]:
+            positions = list(re.finditer(re.escape(keyword), text, flags=re.IGNORECASE))
+            print(f"  JS_KEYWORD {keyword} count={len(positions)}")
+            for match in positions[:40]:
+                pos = match.start()
+                snippet = text[max(0, pos - 300) : min(len(text), pos + 700)]
+                snippet = re.sub(r"\\s+", " ", snippet)
+                print(f"    JS_SNIPPET {snippet}")
+
+
+if __name__ == "__main__":
+    inspect_public_catalogue_embeds()
