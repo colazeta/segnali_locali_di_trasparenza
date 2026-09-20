@@ -76,7 +76,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--methodology-version",
-        default="signal001-v2",
+        default="signal001-v3",
         help="Versioned methodology identifier",
     )
     args = parser.parse_args()
