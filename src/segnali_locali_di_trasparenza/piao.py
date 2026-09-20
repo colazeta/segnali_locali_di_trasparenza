@@ -243,8 +243,11 @@ def discover_piao_for_ipa(
             response.url,
             collector_version=collector_version,
         )
-        # The portal filter is authoritative for the searched IPA. Some historical
-        # page titles are inconsistent, so fill only when the title did not expose it.
+        # Guard against a portal filter unexpectedly returning unrelated records.
+        # Historical pages without an IPA token in the title are accepted because the
+        # filtered result page is then the only available linkage evidence.
+        if record.ipa_code and record.ipa_code.casefold() != ipa_code.casefold():
+            continue
         if not record.ipa_code:
             record.ipa_code = ipa_code
         records.append(record)
