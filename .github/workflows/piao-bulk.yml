@@ -1,17 +1,12 @@
-name: bulk national PIAO catalogue
+name: national PIAO snapshot
 
 on:
   workflow_dispatch:
   schedule:
     - cron: "11 5 * * 1"
-  push:
-    branches:
-      - piao-monitoring
-    paths:
-      - ".github/PIAO_BULK_RUN"
 
 concurrency:
-  group: bulk-national-piao-catalogue-v2
+  group: national-piao-snapshot
   cancel-in-progress: true
 
 permissions:
@@ -31,13 +26,10 @@ jobs:
       - name: Install
         run: pip install -e ".[dev]"
 
-      - name: Test bulk PIAO collector
+      - name: Validate code
         run: |
-          pytest -q tests/test_piao.py
-          ruff check \
-            src/segnali_locali_di_trasparenza/piao.py \
-            scripts/collect_piao_catalogue_shard.py \
-            scripts/consolidate_piao_catalogue_shards.py
+          pytest -q
+          ruff check .
 
       - name: Build municipality registry
         run: python scripts/build_municipality_registry.py
@@ -45,7 +37,7 @@ jobs:
       - name: Upload registry
         uses: actions/upload-artifact@v4
         with:
-          name: piao-bulk-registry
+          name: piao-registry
           path: |
             data/processed/
             data/manifests/municipality_registry.json
@@ -115,7 +107,7 @@ jobs:
       - name: Download registry
         uses: actions/download-artifact@v4
         with:
-          name: piao-bulk-registry
+          name: piao-registry
           path: data
 
       - name: Collect catalogue page shard
@@ -134,7 +126,7 @@ jobs:
         with:
           name: "piao-bulk-shard-${{ matrix.shard }}"
           path: data/piao-bulk-shards/
-          retention-days: 90
+          retention-days: 30
 
   consolidate:
     needs: collect-pages
@@ -153,7 +145,7 @@ jobs:
       - name: Download registry
         uses: actions/download-artifact@v4
         with:
-          name: piao-bulk-registry
+          name: piao-registry
           path: data
 
       - name: Download all page shards
@@ -170,13 +162,22 @@ jobs:
             --index-glob "data/piao-bulk-shards/catalogue-index-*.csv" \
             --publications-glob "data/piao-bulk-shards/publications-*.csv" \
             --manifest-glob "data/piao-bulk-shards/manifest-*.json" \
-            --output-dir data/piao-bulk-national \
+            --output-dir data/piao-national \
             --expected-shards 40 \
             --target-start-year 2026
 
-      - name: Upload validated bulk national snapshot
+      - name: Build analytical coverage tables
+        run: |
+          python scripts/summarize_piao_coverage.py \
+            --registry data/processed/municipalities.csv \
+            --status data/piao-national/piao_status.csv \
+            --output-dir data/analysis
+
+      - name: Upload validated national snapshot
         uses: actions/upload-artifact@v4
         with:
-          name: piao-bulk-national-snapshot
-          path: data/piao-bulk-national/
+          name: piao-national-snapshot
+          path: |
+            data/piao-national/
+            data/analysis/
           retention-days: 90
