@@ -208,3 +208,30 @@ def test_validate_registry_counts_link_states() -> None:
         "ipa_ambiguous": 0,
         "ipa_unmatched": 1,
     }
+
+
+def test_read_istat_preserves_none_as_municipality_name(tmp_path) -> None:
+    source = tmp_path / "istat.xlsx"
+    frame = pd.DataFrame(
+        [
+            {
+                "Codice Comune formato alfanumerico": "001168",
+                "Denominazione in italiano": "None",
+                "Denominazione (Italiana e straniera)": "None",
+                "Denominazione altra lingua": "",
+                "Codice Regione": "01",
+                "Denominazione Regione": "Piemonte",
+                "Codice dell'Unità territoriale sovracomunale (valida a fini statistici)": "001",
+                "Denominazione dell'Unità territoriale sovracomunale (valida a fini statistici)": "Torino",
+                "Sigla automobilistica": "TO",
+                "Codice Catastale del comune": "F931",
+            }
+        ]
+    )
+    frame.to_excel(source, index=False)
+
+    result = read_istat(source)
+
+    assert result.loc[0, "name"] == "None"
+    assert result.loc[0, "name_full"] == "None"
+    assert result.loc[0, "name_normalised"] == "none"
