@@ -4,6 +4,7 @@ import pandas as pd
 
 from segnali_locali_di_trasparenza.transparency import (
     deterministic_region_sample,
+    deterministic_shard,
     extract_candidates,
     normalise_start_url,
     page_looks_like_transparency,
@@ -79,3 +80,28 @@ def test_region_sample_is_stable_and_balanced() -> None:
         ["region_code", "istat_code"]
     ].to_dict("records")
     assert first.groupby("region_code").size().to_dict() == {"01": 2, "02": 2}
+
+
+def test_deterministic_shards_are_stable_disjoint_and_complete() -> None:
+    frame = pd.DataFrame(
+        [
+            {"istat_code": f"{index:06d}", "region_code": "01"}
+            for index in range(1, 31)
+        ]
+    )
+
+    shards = [
+        deterministic_shard(frame, shard_index=index, shard_count=4)
+        for index in range(4)
+    ]
+    codes = [set(shard["istat_code"]) for shard in shards]
+
+    assert set.union(*codes) == set(frame["istat_code"])
+    assert sum(len(codes[index] & codes[other]) for index in range(4) for other in range(index + 1, 4)) == 0
+
+    shuffled = frame.sample(frac=1, random_state=13)
+    assert deterministic_shard(frame, shard_index=2, shard_count=4)["istat_code"].tolist() == deterministic_shard(
+        shuffled,
+        shard_index=2,
+        shard_count=4,
+    )["istat_code"].tolist()
