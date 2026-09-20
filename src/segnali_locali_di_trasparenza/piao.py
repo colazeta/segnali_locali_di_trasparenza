@@ -197,6 +197,24 @@ def _request_page(
     return clean_records, total, count
 
 
+def fetch_catalogue_page(
+    page: int,
+    *,
+    session: requests.Session | None = None,
+    timeout: float = 20,
+) -> tuple[list[dict[str, Any]], int, int]:
+    """Fetch one zero-based page from the anonymous national PIAO catalogue."""
+    if page < 0:
+        raise ValueError("page must be non-negative")
+    session = session or make_session()
+    return _request_page(
+        session,
+        page=page,
+        timeout=timeout,
+        ipa_code=None,
+    )
+
+
 def fetch_publications_for_ipa(
     ipa_code: str,
     *,
