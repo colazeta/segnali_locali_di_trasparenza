@@ -21,8 +21,8 @@ from .registry import normalise_name
 PORTAL_BASE_URL = "https://piao.dfp.gov.it"
 PORTAL_INDEX_URL = f"{PORTAL_BASE_URL}/piao"
 USER_AGENT = (
-    "segnali-locali-di-trasparenza/0.2 "
-    "(+https://github.com/colazeta/segnali_locali_di_trasparenza)"
+    "Mozilla/5.0 (compatible; SegnaliLocaliDiTrasparenza/0.2; "
+    "+https://github.com/colazeta/segnali_locali_di_trasparenza)"
 )
 PERIOD_RE = re.compile(r"(?P<start>20\d{2})\s*[-–—/]\s*(?P<end>20\d{2})")
 NODE_RE = re.compile(r"/node/(?P<node_id>\d+)(?:$|[/?#])", flags=re.IGNORECASE)
@@ -83,6 +83,7 @@ class PortalClient:
             {
                 "User-Agent": USER_AGENT,
                 "Accept": "text/html,application/xhtml+xml;q=0.9,*/*;q=0.5",
+                "Accept-Language": "it-IT,it;q=0.9,en;q=0.7",
             }
         )
 
@@ -291,9 +292,18 @@ def fetch_records(
     for url in urls:
         response = client.get(url)
         if response.status_code >= 400:
+            print(
+                f"PIAO fetch failed: status={response.status_code} url={url}",
+                flush=True,
+            )
             continue
         record = parse_piao_page(response.text, response.url)
         if record.period_start_year is None and not record.administration_name:
+            print(
+                f"PIAO parse yielded no plan metadata: final_url={response.url} "
+                f"title={record.title!r}",
+                flush=True,
+            )
             continue
         records.append(record)
     return records
