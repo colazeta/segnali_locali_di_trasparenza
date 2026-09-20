@@ -19,7 +19,21 @@ STATUS_FIELDS = [
 
 
 def read_csv(path: str) -> pd.DataFrame:
-    return pd.read_csv(path, dtype=str, keep_default_na=False)
+    frame = pd.read_csv(path, dtype=str, keep_default_na=False)
+    legacy_names = {
+        "current_reference_year": "target_start_year",
+        "current_period_present": "period_starting_target_year_present",
+        "current_period_publication_count": (
+            "period_starting_target_year_publication_count"
+        ),
+    }
+    return frame.rename(
+        columns={
+            old: new
+            for old, new in legacy_names.items()
+            if old in frame.columns and new not in frame.columns
+        }
+    )
 
 
 def main() -> None:
