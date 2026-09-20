@@ -67,7 +67,7 @@ def main() -> None:
     parser.add_argument("--limit", type=int)
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--delay", type=float, default=0.35)
-    parser.add_argument("--timeout", type=float, default=20)
+    parser.add_argument("--timeout", type=float, default=8)
     parser.add_argument(
         "--collector-version",
         default=os.environ.get("GITHUB_SHA", "local"),
