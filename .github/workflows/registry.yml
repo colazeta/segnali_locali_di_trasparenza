@@ -27,6 +27,7 @@ concurrency:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   test:
@@ -74,6 +75,17 @@ jobs:
           name: population-probe
           path: data/probes/situas_population_probe.json
           retention-days: 7
+
+      - name: Locate latest validated PIAO snapshot
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run list \
+            --repo "${{ github.repository }}" \
+            --workflow piao-bulk.yml \
+            --status success \
+            --limit 5 \
+            --json databaseId,createdAt,headSha,conclusion,event,name
 
       - name: Upload registry snapshot
         uses: actions/upload-artifact@v4
