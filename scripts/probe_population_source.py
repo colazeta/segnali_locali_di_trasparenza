@@ -4,6 +4,7 @@ import io
 import json
 from pathlib import Path
 import re
+import unicodedata
 import zipfile
 
 import pandas as pd
@@ -92,11 +93,19 @@ def main() -> None:
 
     posas["Codice comune"] = posas["Codice comune"].astype(str).str.zfill(6)
     posas["Totale"] = pd.to_numeric(posas["Totale"], errors="raise")
-    totals = (
-        posas.groupby(["Codice comune", "Comune"], as_index=False)["Totale"]
-        .sum()
-        .rename(columns={"Totale": "population_2026"})
+    age_text = posas["Età"].astype(str).str.strip()
+    non_numeric_ages = sorted(
+        set(age_text.loc[pd.to_numeric(age_text, errors="coerce").isna()])
     )
+    total_mask = age_text.str.casefold().isin({"totale", "total"})
+    total_rows = posas.loc[total_mask].copy()
+    if len(total_rows) != 7895:
+        raise RuntimeError(
+            f"Expected one POSAS total row per municipality, found {len(total_rows)}"
+        )
+    totals = total_rows[
+        ["Codice comune", "Comune", "Totale"]
+    ].rename(columns={"Totale": "population_2026"})
 
     registry = pd.read_csv(
         "data/processed/municipalities.csv",
@@ -106,8 +115,59 @@ def main() -> None:
     registry["istat_code"] = registry["istat_code"].astype(str).str.zfill(6)
     posas_codes = set(totals["Codice comune"])
     current_codes = set(registry["istat_code"])
-    posas_only = totals.loc[totals["Codice comune"].isin(posas_codes - current_codes)]
-    current_only = registry.loc[registry["istat_code"].isin(current_codes - posas_codes)]
+    posas_only = totals.loc[totals["Codice comune"].isin(posas_codes - current_codes)].copy()
+    current_only = registry.loc[registry["istat_code"].isin(current_codes - posas_codes)].copy()
+
+    def norm(value: object) -> str:
+        text = unicodedata.normalize("NFKD", str(value))
+        text = "".join(ch for ch in text if not unicodedata.combining(ch))
+        return " ".join(
+            "".join(ch.lower() if ch.isalnum() else " " for ch in text).split()
+        )
+
+    totals["_name"] = totals["Comune"].map(norm)
+    registry["_name"] = registry["name"].map(norm)
+    current_name_counts = registry["_name"].value_counts()
+    posas_name_counts = totals["_name"].value_counts()
+    unique_current_by_name = (
+        registry.loc[registry["_name"].map(current_name_counts).eq(1)]
+        .set_index("_name")["istat_code"]
+    )
+    unique_posas_by_name = (
+        totals.loc[totals["_name"].map(posas_name_counts).eq(1)]
+        .set_index("_name")["Codice comune"]
+    )
+
+    unmatched_current = current_only.copy()
+    unmatched_current["posas_code_by_unique_name"] = unmatched_current["_name"].map(
+        unique_posas_by_name
+    ).fillna("")
+    unresolved_current = unmatched_current.loc[
+        unmatched_current["posas_code_by_unique_name"].eq("")
+    ]
+
+    unmatched_posas = posas_only.copy()
+    unmatched_posas["current_code_by_unique_name"] = unmatched_posas["_name"].map(
+        unique_current_by_name
+    ).fillna("")
+    unresolved_posas = unmatched_posas.loc[
+        unmatched_posas["current_code_by_unique_name"].eq("")
+    ]
+
+    special_names = {
+        "Lirio",
+        "Montalto Pavese",
+        "Castegnero",
+        "Nanto",
+        "Castegnero Nanto",
+        "None",
+    }
+    special_posas = totals.loc[totals["Comune"].isin(special_names)].drop(
+        columns=["_name"]
+    )
+    special_current = registry.loc[registry["name"].isin(special_names)][
+        ["istat_code", "name", "region_name", "supra_name"]
+    ]
 
     result = {
         "situas_source_url": URL,
@@ -124,10 +184,21 @@ def main() -> None:
         "sample_zip_names": sample_names,
         "sample_preview": sample_preview,
         "posas_age_rows": len(posas),
+        "non_numeric_age_values": non_numeric_ages,
+        "posas_total_rows": len(total_rows),
         "posas_municipality_rows": len(totals),
         "posas_population_total": int(totals["population_2026"].sum()),
+        "direct_code_matches": len(posas_codes & current_codes),
+        "posas_only_count": len(posas_only),
+        "current_only_count": len(current_only),
+        "unresolved_after_unique_name_current_count": len(unresolved_current),
+        "unresolved_after_unique_name_posas_count": len(unresolved_posas),
         "posas_only": posas_only.to_dict(orient="records"),
         "current_only": current_only[["istat_code", "name", "region_name", "supra_name"]].to_dict(orient="records"),
+        "unresolved_current": unresolved_current[["istat_code", "name", "region_name", "supra_name"]].to_dict(orient="records"),
+        "unresolved_posas": unresolved_posas[["Codice comune", "Comune", "population_2026"]].to_dict(orient="records"),
+        "special_posas": special_posas.to_dict(orient="records"),
+        "special_current": special_current.to_dict(orient="records"),
     }
     Path("data/probes").mkdir(parents=True, exist_ok=True)
     Path("data/probes/situas_population_probe.json").write_text(
