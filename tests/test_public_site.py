@@ -129,10 +129,22 @@ def test_build_public_site_generates_home_search_and_municipality_pages(tmp_path
     assert "Solo PIAO precedenti" in lamezia
     assert "2025-2027" in lamezia
     assert "PIAO 2026–2028 presente" in bisaccia
+    assert "0 giorni" in bisaccia
+    assert "scadenza 30/03/2026" in bisaccia
+    assert "≥ 143 giorni" in lamezia
+    assert "scadenza 30/04/2026" in lamezia
+
+    timeliness = (output / "tempi" / "index.html").read_text(encoding="utf-8")
+    assert "Tempi di adozione dei PIAO" in timeliness
+    assert "Bisaccia" in timeliness
+    assert "Lamezia Terme" in timeliness
+    assert "30/04/2026" in timeliness
 
     search = json.loads(
         (output / "data" / "municipalities.json").read_text(encoding="utf-8")
     )
     assert {item["istat_code"] for item in search} == {"079160", "064010"}
+    assert (output / "data" / "piao_timeliness_ranking.json").exists()
+    assert (output / "tempi" / "index.html").exists()
     assert (output / "metodologia" / "index.html").exists()
     assert (output / ".nojekyll").exists()
