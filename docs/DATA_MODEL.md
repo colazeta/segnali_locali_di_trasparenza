@@ -129,6 +129,45 @@ Definitions:
 
 These fields must never be substituted for one another.
 
+## 6. Timeliness layer
+
+The monitor derives a municipality-level timeliness table for the configured target cycle.
+
+For 2026, the reviewed statutory rules are:
+
+- general local-authority deadline: **30 March 2026**, following the extension of the 2026–2028 budget deadline to 28 February 2026 and the 30-day rule in article 8(2) of DM 132/2022;
+- Calabria, Sardegna and Sicilia: **30 April 2026**, following the further extension of the budget deadline to 31 March 2026 for local authorities in those regions.
+
+Core fields:
+
+```
+piao_timeliness
+  istat_code
+  target_first_approval_date
+  budget_deadline
+  expected_piao_deadline
+  deadline_scope
+  deadline_legal_basis
+  approval_lag_days
+  timeliness_status
+  approval_lag_rank_national
+  approval_lag_rank_region
+  days_overdue_at_snapshot
+  publication_lag_days
+  publication_lag_status
+  snapshot_date
+```
+
+`approval_lag_days` is defined as:
+
+`first approval date observed for the target PIAO - expected PIAO deadline`.
+
+Negative values indicate early approval, zero means approval on the deadline, and positive values indicate late approval.
+
+Municipalities for which the target PIAO has not been observed are not assigned a final lag or a ranking. Instead, `days_overdue_at_snapshot` records a right-censored lower bound: the number of days elapsed between the applicable deadline and the snapshot date.
+
+The current public PIAO API does not expose an authoritative historical portal-publication date. Consequently, `publication_lag_days` remains empty until a defensible observation-history measure is available and must not be substituted with the approval date.
+
 ## 6. Future longitudinal state
 
 Once repeated snapshots are persisted, the deterministic publication id can support:
