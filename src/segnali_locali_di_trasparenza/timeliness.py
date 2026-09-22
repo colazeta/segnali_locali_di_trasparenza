@@ -51,7 +51,9 @@ def deadline_rule(target_start_year: int, region_name: str) -> DeadlineRule:
 
 
 def _truthy(value: object) -> bool:
-    return str(value or "").strip().casefold() in {"true", "1", "yes", "si", "sì"}
+    if value is None or pd.isna(value):
+        return False
+    return str(value).strip().casefold() in {"true", "1", "yes", "si", "sì"}
 
 
 def _target_year(status: pd.DataFrame) -> int:
