@@ -62,13 +62,15 @@ def main() -> None:
     parser.add_argument("--output-dir", default="data/piao-bulk-shards")
     parser.add_argument("--shard-index", type=int, required=True)
     parser.add_argument("--shard-count", type=int, required=True)
-    parser.add_argument("--delay", type=float, default=0.10)
+    parser.add_argument("--delay", type=float, default=1.00)
     parser.add_argument("--timeout", type=float, default=20)
     parser.add_argument("--retries", type=int, default=2)
     args = parser.parse_args()
 
     if args.shard_count <= 0:
         raise ValueError("shard-count must be positive")
+    if args.delay < 0:
+        raise ValueError("delay must be non-negative")
     if args.shard_index < 0 or args.shard_index >= args.shard_count:
         raise ValueError("shard-index must be in [0, shard-count)")
 
