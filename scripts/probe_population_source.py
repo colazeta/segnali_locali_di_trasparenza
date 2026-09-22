@@ -69,7 +69,7 @@ def main() -> None:
         if "download" in value.casefold() or ".zip" in value.casefold() or ".csv" in value.casefold()
     ]
 
-    sample_url = "https://demo.istat.it/data/posas/POSAS_2026_it_079_Catanzaro.zip"
+    sample_url = "https://demo.istat.it/data/posas/POSAS_2026_it_Comuni.zip"
     sample = requests.get(
         sample_url,
         timeout=90,
