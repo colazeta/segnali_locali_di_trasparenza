@@ -250,3 +250,141 @@ def build_timeliness_table(
         "snapshot_date",
     ]
     return joined[columns].reset_index(drop=True)
+
+
+LAG_BINS = [
+    ("30+ days early", None, -30),
+    ("1-29 days early", -29, -1),
+    ("on deadline", 0, 0),
+    ("1-30 days late", 1, 30),
+    ("31-60 days late", 31, 60),
+    ("61-90 days late", 61, 90),
+    ("91+ days late", 91, None),
+]
+
+
+def summarise_lag_distribution(timeliness: pd.DataFrame) -> pd.DataFrame:
+    """Summarise the observed approval-lag distribution for rankable municipalities."""
+    lag = pd.to_numeric(timeliness["approval_lag_days"], errors="coerce")
+    rows: list[dict[str, object]] = []
+    denominator = int(lag.notna().sum())
+
+    for label, lower, upper in LAG_BINS:
+        mask = lag.notna()
+        if lower is not None:
+            mask &= lag.ge(lower)
+        if upper is not None:
+            mask &= lag.le(upper)
+        count = int(mask.sum())
+        rows.append(
+            {
+                "lag_band": label,
+                "lower_days": "" if lower is None else lower,
+                "upper_days": "" if upper is None else upper,
+                "municipalities": count,
+                "share_pct": round(count / denominator * 100, 2) if denominator else 0.0,
+            }
+        )
+
+    return pd.DataFrame(rows)
+
+
+def summarise_timeliness_by_region(timeliness: pd.DataFrame) -> pd.DataFrame:
+    """
+    Produce descriptive regional comparisons of approval timeliness.
+
+    These are descriptive statistics, not causal estimates. Lag is already
+    normalised to each municipality's applicable statutory deadline.
+    """
+    rows: list[dict[str, object]] = []
+
+    for region_name, group in timeliness.groupby("region_name", sort=True):
+        lag = pd.to_numeric(group["approval_lag_days"], errors="coerce")
+        valid = lag.notna()
+        observed = group["timeliness_status"].isin(
+            {"early", "on_deadline", "late", "target_present_approval_date_missing"}
+        )
+        missing_target = group["timeliness_status"].eq("target_not_observed")
+        overdue = pd.to_numeric(
+            group.loc[missing_target, "days_overdue_at_snapshot"],
+            errors="coerce",
+        ).dropna()
+
+        valid_lag = lag.loc[valid]
+        on_time = valid_lag.le(0)
+
+        rows.append(
+            {
+                "region_name": region_name,
+                "municipalities": len(group),
+                "target_piao_observed": int(observed.sum()),
+                "target_piao_observed_pct": round(observed.mean() * 100, 2),
+                "target_piao_with_approval_date": int(valid.sum()),
+                "on_or_before_deadline": int(on_time.sum()),
+                "on_or_before_deadline_pct": (
+                    round(on_time.mean() * 100, 2) if len(valid_lag) else None
+                ),
+                "late": int(valid_lag.gt(0).sum()),
+                "lag_median_days": (
+                    float(valid_lag.median()) if len(valid_lag) else None
+                ),
+                "lag_mean_days": (
+                    float(valid_lag.mean()) if len(valid_lag) else None
+                ),
+                "lag_p25_days": (
+                    float(valid_lag.quantile(0.25)) if len(valid_lag) else None
+                ),
+                "lag_p75_days": (
+                    float(valid_lag.quantile(0.75)) if len(valid_lag) else None
+                ),
+                "lag_p90_days": (
+                    float(valid_lag.quantile(0.90)) if len(valid_lag) else None
+                ),
+                "target_piao_not_observed": int(missing_target.sum()),
+                "target_piao_not_observed_pct": round(missing_target.mean() * 100, 2),
+                "missing_target_overdue_median_days": (
+                    float(overdue.median()) if len(overdue) else None
+                ),
+            }
+        )
+
+    out = pd.DataFrame(rows)
+    if out.empty:
+        return out
+    return out.sort_values(
+        ["lag_median_days", "on_or_before_deadline_pct", "region_name"],
+        ascending=[True, False, True],
+        na_position="last",
+        kind="stable",
+    ).reset_index(drop=True)
+
+
+def national_timeliness_statistics(timeliness: pd.DataFrame) -> dict[str, object]:
+    """Return compact national descriptive statistics for the approval-lag layer."""
+    lag = pd.to_numeric(timeliness["approval_lag_days"], errors="coerce").dropna()
+    if lag.empty:
+        return {
+            "n": 0,
+            "mean": None,
+            "median": None,
+            "p10": None,
+            "p25": None,
+            "p75": None,
+            "p90": None,
+            "min": None,
+            "max": None,
+            "on_or_before_deadline_pct": None,
+        }
+
+    return {
+        "n": int(len(lag)),
+        "mean": float(lag.mean()),
+        "median": float(lag.median()),
+        "p10": float(lag.quantile(0.10)),
+        "p25": float(lag.quantile(0.25)),
+        "p75": float(lag.quantile(0.75)),
+        "p90": float(lag.quantile(0.90)),
+        "min": int(lag.min()),
+        "max": int(lag.max()),
+        "on_or_before_deadline_pct": round(float(lag.le(0).mean() * 100), 2),
+    }
