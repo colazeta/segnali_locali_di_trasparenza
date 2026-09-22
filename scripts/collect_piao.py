@@ -126,7 +126,7 @@ def main() -> None:
     parser.add_argument("--istat-codes", nargs="*")
     parser.add_argument("--shard-index", type=int)
     parser.add_argument("--shard-count", type=int)
-    parser.add_argument("--delay", type=float, default=0.35)
+    parser.add_argument("--delay", type=float, default=1.00)
     parser.add_argument("--timeout", type=float, default=20)
     parser.add_argument("--retries", type=int, default=2)
     parser.add_argument(
