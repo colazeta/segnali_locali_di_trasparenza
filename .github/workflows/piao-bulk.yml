@@ -181,6 +181,12 @@ jobs:
             --status data/piao-national/piao_status.csv \
             --output-dir data/analysis
 
+          python scripts/build_piao_timeliness.py \
+            --registry data/processed/municipalities.csv \
+            --status data/piao-national/piao_status.csv \
+            --publications data/piao-national/piao_publications.csv \
+            --output-dir data/analysis
+
       - name: Upload validated national snapshot
         uses: actions/upload-artifact@v4
         with:
