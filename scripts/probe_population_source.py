@@ -89,6 +89,7 @@ def main() -> None:
             sep=";",
             skiprows=1,
             dtype={"Codice comune": str, "Comune": str},
+            keep_default_na=False,
         )
 
     posas["Codice comune"] = posas["Codice comune"].astype(str).str.zfill(6)
@@ -99,7 +100,7 @@ def main() -> None:
     )
     total_mask = age_text.str.casefold().isin({"totale", "total"})
     total_rows = posas.loc[total_mask].copy()
-    if len(total_rows) != 7895:
+    if len(total_rows) != 7896:
         raise RuntimeError(
             f"Expected one POSAS total row per municipality, found {len(total_rows)}"
         )
