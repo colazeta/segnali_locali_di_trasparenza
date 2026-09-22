@@ -377,7 +377,7 @@ def national_timeliness_statistics(timeliness: pd.DataFrame) -> dict[str, object
         }
 
     return {
-        "n": int(len(lag)),
+        "n": len(lag),
         "mean": float(lag.mean()),
         "median": float(lag.median()),
         "p10": float(lag.quantile(0.10)),
