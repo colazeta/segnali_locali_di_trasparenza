@@ -56,10 +56,10 @@ def main() -> None:
 
     zip_tokens = sorted(set(re.findall(r"[^\"'<>\\s]+\\.zip(?:\\?[^\"'<>\\s]*)?", html)))
     script_srcs = sorted(
-        set(re.findall(r"<script[^>]+src=[\"']([^\"']+)[\"']", html, flags=re.I))
+        set(re.findall(r"<script[^>]+src=[\"']([^\"']+)[\"']", html, flags=re.IGNORECASE))
     )
     hrefs = sorted(
-        set(re.findall(r"href=[\"']([^\"']+)[\"']", html, flags=re.I))
+        set(re.findall(r"href=[\"']([^\"']+)[\"']", html, flags=re.IGNORECASE))
     )
     downloadish = [
         value
