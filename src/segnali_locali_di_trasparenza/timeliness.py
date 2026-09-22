@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
-from typing import Any
-
 import pandas as pd
 
 
@@ -194,7 +192,7 @@ def build_timeliness_table(
     joined["approval_lag_rank_region"] = pd.Series(
         pd.NA, index=joined.index, dtype="Int64"
     )
-    for _, indexes in joined.loc[rankable].groupby("region_name").groups.items():
+    for indexes in joined.loc[rankable].groupby("region_name").groups.values():
         joined.loc[indexes, "approval_lag_rank_region"] = (
             joined.loc[indexes, "approval_lag_days"]
             .rank(method="dense", ascending=True)
