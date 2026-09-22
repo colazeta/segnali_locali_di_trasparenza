@@ -38,7 +38,7 @@ jobs:
             --publications-output data/piao/pilot-publications.csv \
             --istat-codes 001168 015146 021014 058091 079160 \
             --target-start-year 2026 \
-            --delay 0.35
+            --delay 1.00
 
       - name: Upload pilot
         uses: actions/upload-artifact@v4
