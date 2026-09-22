@@ -139,6 +139,10 @@ def test_build_public_site_generates_home_search_and_municipality_pages(tmp_path
     assert "Bisaccia" in timeliness
     assert "Lamezia Terme" in timeliness
     assert "30/04/2026" in timeliness
+    assert "Dove si concentra il lag?" in timeliness
+    assert "Tempestività per regione" in timeliness
+    assert "Campania" in timeliness
+    assert "Calabria" in timeliness
 
     search = json.loads(
         (output / "data" / "municipalities.json").read_text(encoding="utf-8")
