@@ -54,7 +54,10 @@ jobs:
     timeout-minutes: 90
     strategy:
       fail-fast: false
-      max-parallel: 8
+      # Keep aggregate load on the public government API deliberately low.
+      # With --delay 1.00 below, two concurrent shards imply a theoretical
+      # ceiling of about 2 requests/second before network latency.
+      max-parallel: 2
       matrix:
         shard:
           - 0
@@ -122,7 +125,7 @@ jobs:
             --output-dir data/piao-bulk-shards \
             --shard-index "${{ matrix.shard }}" \
             --shard-count 40 \
-            --delay 0.10 \
+            --delay 1.00 \
             --timeout 20 \
             --retries 2
 
