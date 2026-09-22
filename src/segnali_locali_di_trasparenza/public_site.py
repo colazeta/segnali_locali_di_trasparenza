@@ -10,6 +10,8 @@ from urllib.parse import urlparse
 
 import pandas as pd
 
+from segnali_locali_di_trasparenza.timeliness import build_timeliness_table
+
 
 STATUS_META = {
     "target_period_present": {
@@ -153,6 +155,7 @@ def _layout(
         <p>Monitor indipendente costruito su dati del Portale PIAO del Dipartimento della Funzione Pubblica, ISTAT e IPA.</p>
       </div>
       <div>
+        <p><a href="{_with_base(base_path, 'tempi/')}">Tempi di adozione</a></p>
         <p><a href="{_with_base(base_path, 'metodologia/')}">Metodologia</a></p>
         <p><a href="https://github.com/colazeta/segnali_locali_di_trasparenza" rel="noopener noreferrer">Codice e dati ↗</a></p>
       </div>
@@ -253,6 +256,12 @@ def _build_home(
 
     <section class="shell metrics" aria-label="Indicatori nazionali">
       {metrics}
+    </section>
+
+    <section class="shell evidence-panel">
+      <h2>Quanto sono tempestivi i comuni?</h2>
+      <p>La classifica confronta la prima data di approvazione osservata del PIAO {html.escape(target_period)} con la scadenza normativa applicabile al singolo comune.</p>
+      <p><a class="button-link" href="{_with_base(base_path, 'tempi/')}">Apri la classifica dei tempi →</a></p>
     </section>
 
     {error_note}
@@ -381,6 +390,28 @@ def _build_municipality_page(
     approval = _display_date(row.get("latest_approval_date"))
     publication_count = int(float(_text(row.get("publication_count")) or 0))
 
+    deadline = _display_date(row.get("expected_piao_deadline"))
+    lag_raw = _text(row.get("approval_lag_days"))
+    overdue_raw = _text(row.get("days_overdue_at_snapshot"))
+    timeliness_status = _text(row.get("timeliness_status"))
+    if lag_raw:
+        lag = int(float(lag_raw))
+        lag_value = "0 giorni" if lag == 0 else f"{lag:+d} giorni"
+        timeliness_metric = _metric_card(
+            lag_value,
+            "lag di approvazione",
+            f"scadenza {deadline}",
+        )
+    elif timeliness_status == "target_not_observed" and overdue_raw:
+        overdue = int(float(overdue_raw))
+        timeliness_metric = _metric_card(
+            f"≥ {overdue} giorni",
+            "ritardo minimo accumulato",
+            f"scadenza {deadline}",
+        )
+    else:
+        timeliness_metric = _metric_card("n.d.", "lag di approvazione", f"scadenza {deadline}")
+
     history = _publication_rows(publications)
 
     body = f"""
@@ -408,6 +439,7 @@ def _build_municipality_page(
       {_metric_card(latest_version, "ultima versione")}
       {_metric_card(approval, "ultima approvazione")}
       {_metric_card(str(publication_count), "pubblicazioni osservate")}
+      {timeliness_metric}
     </section>
 
     <section class="shell content-section">
@@ -435,6 +467,177 @@ def _build_municipality_page(
         body=body,
         base_path=base_path,
         body_class="municipality",
+    )
+
+
+def _build_timeliness_page(
+    timeliness: pd.DataFrame,
+    *,
+    base_path: str,
+    target_period: str,
+    snapshot_date: str,
+) -> str:
+    lag = pd.to_numeric(timeliness["approval_lag_days"], errors="coerce")
+    ranked = timeliness.loc[lag.notna()].copy()
+    ranked["_lag"] = lag.loc[ranked.index].astype(int)
+    ranked = ranked.sort_values(
+        ["_lag", "region_name", "name", "istat_code"],
+        kind="stable",
+    )
+
+    pending = timeliness.loc[
+        timeliness["timeliness_status"].eq("target_not_observed")
+    ].copy()
+    pending["_overdue"] = pd.to_numeric(
+        pending["days_overdue_at_snapshot"], errors="coerce"
+    )
+    pending = pending.sort_values(
+        ["_overdue", "region_name", "name", "istat_code"],
+        ascending=[False, True, True, True],
+        na_position="last",
+        kind="stable",
+    )
+
+    missing_date = timeliness.loc[
+        timeliness["timeliness_status"].eq("target_present_approval_date_missing")
+    ].copy()
+
+    on_time = int((ranked["_lag"] <= 0).sum())
+    late = int((ranked["_lag"] > 0).sum())
+    median_lag = ranked["_lag"].median() if not ranked.empty else None
+    median_text = (
+        "—"
+        if median_lag is None or pd.isna(median_lag)
+        else f"{median_lag:+.0f} giorni"
+    )
+
+    ranked_rows: list[str] = []
+    for _, row in ranked.iterrows():
+        code = _text(row["istat_code"])
+        rank = _text(row.get("approval_lag_rank_national")) or "—"
+        lag_days = int(row["_lag"])
+        lag_text = "0" if lag_days == 0 else f"{lag_days:+d}"
+        status = (
+            "In anticipo"
+            if lag_days < 0
+            else "In scadenza"
+            if lag_days == 0
+            else "In ritardo"
+        )
+        ranked_rows.append(
+            f"""
+            <tr>
+              <td>{html.escape(rank)}</td>
+              <th scope="row"><a href="{_with_base(base_path, f'comune/{code}/')}">{html.escape(_text(row["name"]))}</a></th>
+              <td>{html.escape(_text(row["region_name"]))}</td>
+              <td>{_display_date(row["expected_piao_deadline"])}</td>
+              <td>{_display_date(row["target_first_approval_date"])}</td>
+              <td>{html.escape(lag_text)}</td>
+              <td>{html.escape(status)}</td>
+            </tr>"""
+        )
+
+    pending_rows: list[str] = []
+    for _, row in pending.iterrows():
+        code = _text(row["istat_code"])
+        overdue = _text(row.get("days_overdue_at_snapshot"))
+        overdue_text = f"≥ {int(float(overdue))}" if overdue else "—"
+        pending_rows.append(
+            f"""
+            <tr>
+              <th scope="row"><a href="{_with_base(base_path, f'comune/{code}/')}">{html.escape(_text(row["name"]))}</a></th>
+              <td>{html.escape(_text(row["region_name"]))}</td>
+              <td>{_display_date(row["expected_piao_deadline"])}</td>
+              <td>{html.escape(overdue_text)}</td>
+            </tr>"""
+        )
+
+    missing_date_note = ""
+    if not missing_date.empty:
+        missing_date_note = (
+            f'<p class="alert">{len(missing_date)} comuni hanno un PIAO {html.escape(target_period)} '
+            "osservato ma senza una data di approvazione utilizzabile e non entrano nella classifica.</p>"
+        )
+
+    body = f"""
+    <section class="hero">
+      <div class="shell">
+        <p class="eyebrow">Tempestività · ciclo {html.escape(target_period)}</p>
+        <h1>Tempi di adozione dei PIAO</h1>
+        <p class="hero-copy">Confronto tra la prima data di approvazione osservata del PIAO target e la scadenza normativa applicabile a ciascun comune.</p>
+        <p class="snapshot">Snapshot validato: <strong>{html.escape(snapshot_date or "—")}</strong></p>
+      </div>
+    </section>
+
+    <section class="shell metrics" aria-label="Indicatori di tempestività">
+      {_metric_card(str(len(ranked)), "comuni classificabili")}
+      {_metric_card(str(on_time), "entro la scadenza")}
+      {_metric_card(str(late), "oltre la scadenza")}
+      {_metric_card(median_text, "lag mediano")}
+    </section>
+
+    <section class="shell evidence-panel">
+      <h2>Come leggere il lag</h2>
+      <p>Il valore è <strong>data della prima approvazione osservata − scadenza applicabile</strong>. Un valore negativo indica un'approvazione anticipata; zero indica il giorno della scadenza; un valore positivo indica ritardo.</p>
+      <p>Per il 2026 la scadenza è il 30 marzo per la generalità degli enti locali e il 30 aprile per i comuni di Calabria, Sardegna e Sicilia. Questa è una classifica di <strong>adozione</strong>, non della data storica di pubblicazione sul Portale, che l'API pubblica non espone.</p>
+      {missing_date_note}
+    </section>
+
+    <section class="shell region-section">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Ranking</p>
+          <h2>Classifica nazionale per lag di approvazione</h2>
+        </div>
+        <p>I pari merito condividono lo stesso rango.</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Rango</th>
+              <th>Comune</th>
+              <th>Regione</th>
+              <th>Scadenza</th>
+              <th>Prima approvazione</th>
+              <th>Lag giorni</th>
+              <th>Stato</th>
+            </tr>
+          </thead>
+          <tbody>{''.join(ranked_rows)}</tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="shell region-section">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Censura a destra</p>
+          <h2>PIAO target non ancora osservato</h2>
+        </div>
+        <p>Il ritardo è un limite inferiore alla data dello snapshot, non un lag finale.</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Comune</th>
+              <th>Regione</th>
+              <th>Scadenza</th>
+              <th>Ritardo minimo (giorni)</th>
+            </tr>
+          </thead>
+          <tbody>{''.join(pending_rows)}</tbody>
+        </table>
+      </div>
+    </section>
+    """
+    return _layout(
+        title=f"Tempi di adozione PIAO {target_period}",
+        description=f"Classifica dei comuni italiani per tempestività di approvazione del PIAO {target_period}.",
+        body=body,
+        base_path=base_path,
+        body_class="timeliness-page",
     )
 
 
@@ -531,6 +734,24 @@ def build_site(
 
     joined["cycle_status"] = joined.apply(classify_status, axis=1)
 
+    timeliness = build_timeliness_table(registry, status, publications)
+    timeliness_columns = [
+        "istat_code",
+        "target_first_approval_date",
+        "expected_piao_deadline",
+        "approval_lag_days",
+        "timeliness_status",
+        "approval_lag_rank_national",
+        "approval_lag_rank_region",
+        "days_overdue_at_snapshot",
+    ]
+    joined = joined.merge(
+        timeliness[timeliness_columns],
+        on="istat_code",
+        how="left",
+        validate="one_to_one",
+    )
+
     snapshot_date = _snapshot_date(status["retrieved_at"].max())
 
     region_rows: list[dict[str, object]] = []
@@ -552,6 +773,7 @@ def build_site(
     (output_dir / "assets").mkdir(parents=True, exist_ok=True)
     (output_dir / "data").mkdir(parents=True, exist_ok=True)
     (output_dir / "comune").mkdir(parents=True, exist_ok=True)
+    (output_dir / "tempi").mkdir(parents=True, exist_ok=True)
     (output_dir / "metodologia").mkdir(parents=True, exist_ok=True)
 
     for asset in ["style.css", "app.js"]:
@@ -570,6 +792,17 @@ def build_site(
         snapshot_date=snapshot_date,
     )
     (output_dir / "index.html").write_text(home, encoding="utf-8")
+
+    timeliness_page = _build_timeliness_page(
+        timeliness,
+        base_path=base_path,
+        target_period=target_period,
+        snapshot_date=snapshot_date,
+    )
+    (output_dir / "tempi" / "index.html").write_text(
+        timeliness_page,
+        encoding="utf-8",
+    )
 
     methodology = _build_methodology(
         base_path=base_path,
@@ -622,6 +855,11 @@ def build_site(
         json.dumps(search_records, ensure_ascii=False, separators=(",", ":")),
         encoding="utf-8",
     )
+    timeliness.to_json(
+        output_dir / "data" / "piao_timeliness_ranking.json",
+        orient="records",
+        force_ascii=False,
+    )
 
     summary = {
         "municipalities": len(joined),
@@ -635,6 +873,7 @@ def build_site(
         },
         "pages": {
             "home": 1,
+            "timeliness": 1,
             "methodology": 1,
             "municipality": len(joined),
         },
