@@ -119,7 +119,13 @@ Il workflow produce inoltre:
 - stato del ciclo per comune;
 - copertura per regione;
 - copertura per area sovracomunale;
-- summary nazionale.
+- summary nazionale;
+- **classifica di tempestività di adozione** del PIAO target rispetto alla scadenza normativa applicabile;
+- ritardo minimo accumulato, alla data dello snapshot, per i comuni senza PIAO target osservato.
+
+Per il ciclo 2026–2028 il monitor usa il 30 marzo 2026 come scadenza generale degli enti locali e il 30 aprile 2026 per i comuni di Calabria, Sardegna e Sicilia, in conseguenza dei rispettivi differimenti del termine di approvazione del bilancio.
+
+La classifica corrente misura il **lag di approvazione**, non il lag storico di pubblicazione sul Portale: l'API pubblica non espone un timestamp storico autorevole di pubblicazione.
 
 ## Automazione
 
