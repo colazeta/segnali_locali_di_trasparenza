@@ -6,6 +6,7 @@ from pathlib import Path
 import re
 import zipfile
 
+import pandas as pd
 import requests
 
 
@@ -78,13 +79,35 @@ def main() -> None:
     sample.raise_for_status()
     with zipfile.ZipFile(io.BytesIO(sample.content)) as archive:
         sample_names = archive.namelist()
-        sample_preview = {}
-        for name in sample_names[:5]:
-            raw = archive.read(name)
-            try:
-                sample_preview[name] = raw.decode("utf-8-sig").splitlines()[:8]
-            except UnicodeDecodeError:
-                sample_preview[name] = raw.decode("latin-1").splitlines()[:8]
+        raw = archive.read(sample_names[0])
+        sample_preview = {
+            sample_names[0]: raw.decode("utf-8-sig").splitlines()[:8]
+        }
+        posas = pd.read_csv(
+            io.BytesIO(raw),
+            sep=";",
+            skiprows=1,
+            dtype={"Codice comune": str, "Comune": str},
+        )
+
+    posas["Codice comune"] = posas["Codice comune"].astype(str).str.zfill(6)
+    posas["Totale"] = pd.to_numeric(posas["Totale"], errors="raise")
+    totals = (
+        posas.groupby(["Codice comune", "Comune"], as_index=False)["Totale"]
+        .sum()
+        .rename(columns={"Totale": "population_2026"})
+    )
+
+    registry = pd.read_csv(
+        "data/processed/municipalities.csv",
+        dtype=str,
+        keep_default_na=False,
+    )
+    registry["istat_code"] = registry["istat_code"].astype(str).str.zfill(6)
+    posas_codes = set(totals["Codice comune"])
+    current_codes = set(registry["istat_code"])
+    posas_only = totals.loc[totals["Codice comune"].isin(posas_codes - current_codes)]
+    current_only = registry.loc[registry["istat_code"].isin(current_codes - posas_codes)]
 
     result = {
         "situas_source_url": URL,
@@ -100,6 +123,11 @@ def main() -> None:
         "sample_url": sample_url,
         "sample_zip_names": sample_names,
         "sample_preview": sample_preview,
+        "posas_age_rows": len(posas),
+        "posas_municipality_rows": len(totals),
+        "posas_population_total": int(totals["population_2026"].sum()),
+        "posas_only": posas_only.to_dict(orient="records"),
+        "current_only": current_only[["istat_code", "name", "region_name", "supra_name"]].to_dict(orient="records"),
     }
     Path("data/probes").mkdir(parents=True, exist_ok=True)
     Path("data/probes/situas_population_probe.json").write_text(
