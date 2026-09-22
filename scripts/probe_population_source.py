@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import io
 import json
 from pathlib import Path
 import re
+import zipfile
 
 import requests
 
@@ -67,6 +69,23 @@ def main() -> None:
         if "download" in value.casefold() or ".zip" in value.casefold() or ".csv" in value.casefold()
     ]
 
+    sample_url = "https://demo.istat.it/data/posas/POSAS_2026_it_079_Catanzaro.zip"
+    sample = requests.get(
+        sample_url,
+        timeout=90,
+        headers={"User-Agent": "segnali-locali-di-trasparenza/0.1"},
+    )
+    sample.raise_for_status()
+    with zipfile.ZipFile(io.BytesIO(sample.content)) as archive:
+        sample_names = archive.namelist()
+        sample_preview = {}
+        for name in sample_names[:5]:
+            raw = archive.read(name)
+            try:
+                sample_preview[name] = raw.decode("utf-8-sig").splitlines()[:8]
+            except UnicodeDecodeError:
+                sample_preview[name] = raw.decode("latin-1").splitlines()[:8]
+
     result = {
         "situas_source_url": URL,
         "situas_rows": len(rows),
@@ -77,7 +96,10 @@ def main() -> None:
         "posas_html_length": len(html),
         "posas_zip_tokens": zip_tokens[:100],
         "posas_script_srcs": script_srcs,
-        "posas_downloadish_hrefs": downloadish[:100],
+        "posas_downloadish_hrefs": downloadish[:120],
+        "sample_url": sample_url,
+        "sample_zip_names": sample_names,
+        "sample_preview": sample_preview,
     }
     Path("data/probes").mkdir(parents=True, exist_ok=True)
     Path("data/probes/situas_population_probe.json").write_text(
