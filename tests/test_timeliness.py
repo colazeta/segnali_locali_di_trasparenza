@@ -5,6 +5,9 @@ import pandas as pd
 from segnali_locali_di_trasparenza.timeliness import (
     build_timeliness_table,
     deadline_rule,
+    national_timeliness_statistics,
+    summarise_lag_distribution,
+    summarise_timeliness_by_region,
 )
 
 
@@ -130,3 +133,61 @@ def test_timeliness_uses_first_target_approval_and_censors_missing_target() -> N
     assert result.loc["064010", "publication_lag_status"] == (
         "not_historically_exposed_by_public_api"
     )
+
+
+
+def test_timeliness_descriptive_summaries() -> None:
+    frame = pd.DataFrame(
+        [
+            {
+                "region_name": "A",
+                "approval_lag_days": -40,
+                "timeliness_status": "early",
+                "days_overdue_at_snapshot": pd.NA,
+            },
+            {
+                "region_name": "A",
+                "approval_lag_days": 0,
+                "timeliness_status": "on_deadline",
+                "days_overdue_at_snapshot": pd.NA,
+            },
+            {
+                "region_name": "A",
+                "approval_lag_days": 15,
+                "timeliness_status": "late",
+                "days_overdue_at_snapshot": pd.NA,
+            },
+            {
+                "region_name": "B",
+                "approval_lag_days": 45,
+                "timeliness_status": "late",
+                "days_overdue_at_snapshot": pd.NA,
+            },
+            {
+                "region_name": "B",
+                "approval_lag_days": pd.NA,
+                "timeliness_status": "target_not_observed",
+                "days_overdue_at_snapshot": 120,
+            },
+        ]
+    )
+
+    national = national_timeliness_statistics(frame)
+    assert national["n"] == 4
+    assert national["min"] == -40
+    assert national["max"] == 45
+    assert national["on_or_before_deadline_pct"] == 50.0
+
+    distribution = summarise_lag_distribution(frame).set_index("lag_band")
+    assert distribution.loc["30+ days early", "municipalities"] == 1
+    assert distribution.loc["on deadline", "municipalities"] == 1
+    assert distribution.loc["1-30 days late", "municipalities"] == 1
+    assert distribution.loc["31-60 days late", "municipalities"] == 1
+    assert round(float(distribution["share_pct"].sum()), 2) == 100.0
+
+    regional = summarise_timeliness_by_region(frame).set_index("region_name")
+    assert regional.loc["A", "target_piao_observed"] == 3
+    assert regional.loc["A", "on_or_before_deadline"] == 2
+    assert round(float(regional.loc["A", "on_or_before_deadline_pct"]), 2) == 66.67
+    assert regional.loc["B", "target_piao_not_observed"] == 1
+    assert regional.loc["B", "missing_target_overdue_median_days"] == 120
