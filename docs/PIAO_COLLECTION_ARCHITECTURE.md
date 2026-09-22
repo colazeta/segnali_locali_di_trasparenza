@@ -92,6 +92,30 @@ This mode is retained for:
 
 It is not intended to duplicate the full national refresh permanently.
 
+## Access etiquette and request budget
+
+The collector deliberately treats the public Portale PIAO service as a shared
+government resource rather than as a high-throughput data API.
+
+For the scheduled national refresh:
+
+- catalogue metadata are collected from the JSON endpoint already used by the
+  anonymous public catalogue;
+- no authenticated management endpoint is called;
+- PIAO PDFs and attachments are not downloaded during the metadata census;
+- GitHub Actions runs at most **2 catalogue shards concurrently**;
+- each shard waits at least **1.00 second** after each completed page request;
+- the resulting theoretical ceiling is about **2 requests/second** before
+  network latency and processing time, and normal observed throughput should be
+  lower;
+- HTTP 429 and transient 5xx responses use bounded retry/backoff and respect
+  `Retry-After`;
+- the User-Agent identifies this project and links to its public repository;
+- repeated failures are surfaced as failed collection rather than bypassed.
+
+These limits are intentionally conservative. They may be tightened if the
+service signals load or publishes explicit machine-access guidance.
+
 ## Measured baseline
 
 The first complete per-IPA national baseline completed successfully with:

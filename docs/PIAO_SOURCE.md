@@ -108,6 +108,22 @@ For future longitudinal monitoring, the project may also maintain
 `first_observed_at` and `last_observed_at`. Those dates describe our observation
 history, not the historical publication timestamp.
 
+## Responsible access
+
+The project uses only the anonymous JSON interface that powers the public
+catalogue. Routine metadata collection does not fetch the linked PDF documents
+or attachments.
+
+Scheduled national collection is rate-limited at the workflow level to a
+maximum of two concurrent shards, with a one-second post-request delay in each
+shard. This bounds the nominal request rate to roughly two requests per second
+before latency. Retries are bounded, use exponential backoff for transient
+errors, and honour `Retry-After` when supplied.
+
+The collector identifies itself through a project-specific User-Agent. If the
+Portale PIAO publishes more specific automated-access instructions, those
+instructions take precedence over the current defaults.
+
 ## Interface stability
 
 The endpoints above are public interfaces used by the official public frontend,
