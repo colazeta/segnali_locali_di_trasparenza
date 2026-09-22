@@ -734,6 +734,24 @@ def build_site(
 
     joined["cycle_status"] = joined.apply(classify_status, axis=1)
 
+    timeliness = build_timeliness_table(registry, status, publications)
+    timeliness_columns = [
+        "istat_code",
+        "target_first_approval_date",
+        "expected_piao_deadline",
+        "approval_lag_days",
+        "timeliness_status",
+        "approval_lag_rank_national",
+        "approval_lag_rank_region",
+        "days_overdue_at_snapshot",
+    ]
+    joined = joined.merge(
+        timeliness[timeliness_columns],
+        on="istat_code",
+        how="left",
+        validate="one_to_one",
+    )
+
     snapshot_date = _snapshot_date(status["retrieved_at"].max())
 
     region_rows: list[dict[str, object]] = []
@@ -755,6 +773,7 @@ def build_site(
     (output_dir / "assets").mkdir(parents=True, exist_ok=True)
     (output_dir / "data").mkdir(parents=True, exist_ok=True)
     (output_dir / "comune").mkdir(parents=True, exist_ok=True)
+    (output_dir / "tempi").mkdir(parents=True, exist_ok=True)
     (output_dir / "metodologia").mkdir(parents=True, exist_ok=True)
 
     for asset in ["style.css", "app.js"]:
@@ -773,6 +792,17 @@ def build_site(
         snapshot_date=snapshot_date,
     )
     (output_dir / "index.html").write_text(home, encoding="utf-8")
+
+    timeliness_page = _build_timeliness_page(
+        timeliness,
+        base_path=base_path,
+        target_period=target_period,
+        snapshot_date=snapshot_date,
+    )
+    (output_dir / "tempi" / "index.html").write_text(
+        timeliness_page,
+        encoding="utf-8",
+    )
 
     methodology = _build_methodology(
         base_path=base_path,
@@ -825,6 +855,11 @@ def build_site(
         json.dumps(search_records, ensure_ascii=False, separators=(",", ":")),
         encoding="utf-8",
     )
+    timeliness.to_json(
+        output_dir / "data" / "piao_timeliness_ranking.json",
+        orient="records",
+        force_ascii=False,
+    )
 
     summary = {
         "municipalities": len(joined),
@@ -838,6 +873,7 @@ def build_site(
         },
         "pages": {
             "home": 1,
+            "timeliness": 1,
             "methodology": 1,
             "municipality": len(joined),
         },
