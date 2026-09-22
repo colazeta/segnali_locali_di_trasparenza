@@ -10,7 +10,12 @@ from urllib.parse import urlparse
 
 import pandas as pd
 
-from segnali_locali_di_trasparenza.timeliness import build_timeliness_table
+from segnali_locali_di_trasparenza.timeliness import (
+    build_timeliness_table,
+    national_timeliness_statistics,
+    summarise_lag_distribution,
+    summarise_timeliness_by_region,
+)
 
 
 STATUS_META = {
@@ -502,6 +507,10 @@ def _build_timeliness_page(
         timeliness["timeliness_status"].eq("target_present_approval_date_missing")
     ].copy()
 
+    national_stats = national_timeliness_statistics(timeliness)
+    regional_stats = summarise_timeliness_by_region(timeliness)
+    lag_distribution = summarise_lag_distribution(timeliness)
+
     on_time = int((ranked["_lag"] <= 0).sum())
     late = int((ranked["_lag"] > 0).sum())
     median_lag = ranked["_lag"].median() if not ranked.empty else None
@@ -552,6 +561,36 @@ def _build_timeliness_page(
             </tr>"""
         )
 
+    regional_rows: list[str] = []
+    for _, row in regional_stats.iterrows():
+        on_time_pct = _text(row.get("on_or_before_deadline_pct")) or "—"
+        median = _text(row.get("lag_median_days")) or "—"
+        p90 = _text(row.get("lag_p90_days")) or "—"
+        observed_pct = _text(row.get("target_piao_observed_pct")) or "—"
+        regional_rows.append(
+            f"""
+            <tr>
+              <th scope="row">{html.escape(_text(row["region_name"]))}</th>
+              <td>{int(row["municipalities"])}</td>
+              <td>{html.escape(observed_pct)}%</td>
+              <td>{html.escape(on_time_pct)}%</td>
+              <td>{html.escape(median)}</td>
+              <td>{html.escape(p90)}</td>
+              <td>{int(row["target_piao_not_observed"])}</td>
+            </tr>"""
+        )
+
+    distribution_rows: list[str] = []
+    for _, row in lag_distribution.iterrows():
+        distribution_rows.append(
+            f"""
+            <tr>
+              <th scope="row">{html.escape(_text(row["lag_band"]))}</th>
+              <td>{int(row["municipalities"])}</td>
+              <td>{float(row["share_pct"]):.1f}%</td>
+            </tr>"""
+        )
+
     missing_date_note = ""
     if not missing_date.empty:
         missing_date_note = (
@@ -581,6 +620,56 @@ def _build_timeliness_page(
       <p>Il valore è <strong>data della prima approvazione osservata − scadenza applicabile</strong>. Un valore negativo indica un'approvazione anticipata; zero indica il giorno della scadenza; un valore positivo indica ritardo.</p>
       <p>Per il 2026 la scadenza è il 30 marzo per la generalità degli enti locali e il 30 aprile per i comuni di Calabria, Sardegna e Sicilia. Questa è una classifica di <strong>adozione</strong>, non della data storica di pubblicazione sul Portale, che l'API pubblica non espone.</p>
       {missing_date_note}
+    </section>
+
+    <section class="shell region-section">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Distribuzione</p>
+          <h2>Dove si concentra il lag?</h2>
+        </div>
+        <p>Solo comuni con una data di approvazione del ciclo target utilizzabile.</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Fascia</th>
+              <th>Comuni</th>
+              <th>Quota</th>
+            </tr>
+          </thead>
+          <tbody>{''.join(distribution_rows)}</tbody>
+        </table>
+      </div>
+      <p class="search-hint">P25: {national_stats["p25"] if national_stats["p25"] is not None else "—"} giorni · mediana: {national_stats["median"] if national_stats["median"] is not None else "—"} · P75: {national_stats["p75"] if national_stats["p75"] is not None else "—"} · P90: {national_stats["p90"] if national_stats["p90"] is not None else "—"}.</p>
+    </section>
+
+    <section class="shell region-section">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Confronto territoriale</p>
+          <h2>Tempestività per regione</h2>
+        </div>
+        <p>Statistiche descrittive sul lag rispetto alla scadenza applicabile; non sono stime causali.</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Regione</th>
+              <th>Comuni</th>
+              <th>PIAO target osservato</th>
+              <th>Entro scadenza*</th>
+              <th>Lag mediano</th>
+              <th>P90 lag</th>
+              <th>Target non osservato</th>
+            </tr>
+          </thead>
+          <tbody>{''.join(regional_rows)}</tbody>
+        </table>
+      </div>
+      <p class="search-hint">* Percentuale calcolata sui comuni con PIAO target e data di approvazione utilizzabile.</p>
     </section>
 
     <section class="shell region-section">

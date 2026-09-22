@@ -6,7 +6,12 @@ from pathlib import Path
 
 import pandas as pd
 
-from segnali_locali_di_trasparenza.timeliness import build_timeliness_table
+from segnali_locali_di_trasparenza.timeliness import (
+    build_timeliness_table,
+    national_timeliness_statistics,
+    summarise_lag_distribution,
+    summarise_timeliness_by_region,
+)
 
 
 def main() -> None:
@@ -27,8 +32,16 @@ def main() -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     ranking_path = output_dir / "piao_timeliness_ranking.csv"
+    regional_path = output_dir / "piao_timeliness_by_region.csv"
+    distribution_path = output_dir / "piao_timeliness_distribution.csv"
     summary_path = output_dir / "piao_timeliness_summary.json"
+
+    regional = summarise_timeliness_by_region(ranking)
+    distribution = summarise_lag_distribution(ranking)
+
     ranking.to_csv(ranking_path, index=False)
+    regional.to_csv(regional_path, index=False)
+    distribution.to_csv(distribution_path, index=False)
 
     lag = pd.to_numeric(ranking["approval_lag_days"], errors="coerce")
     valid = lag.notna()
@@ -53,12 +66,7 @@ def main() -> None:
             ).sum()
         ),
         "target_piao_not_observed": int(missing_target.sum()),
-        "approval_lag_days": {
-            "median": float(lag[valid].median()) if valid.any() else None,
-            "mean": float(lag[valid].mean()) if valid.any() else None,
-            "min": int(lag[valid].min()) if valid.any() else None,
-            "max": int(lag[valid].max()) if valid.any() else None,
-        },
+        "approval_lag_days": national_timeliness_statistics(ranking),
         "deadline_rules": sorted(
             ranking[
                 [
@@ -72,7 +80,11 @@ def main() -> None:
             .to_dict(orient="records"),
             key=lambda item: item["expected_piao_deadline"],
         ),
-        "output": str(ranking_path),
+        "outputs": {
+            "ranking": str(ranking_path),
+            "regional": str(regional_path),
+            "distribution": str(distribution_path),
+        },
     }
 
     summary_path.write_text(
