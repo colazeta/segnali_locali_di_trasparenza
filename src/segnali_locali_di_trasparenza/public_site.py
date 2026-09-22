@@ -10,6 +10,8 @@ from urllib.parse import urlparse
 
 import pandas as pd
 
+from segnali_locali_di_trasparenza.timeliness import build_timeliness_table
+
 
 STATUS_META = {
     "target_period_present": {
