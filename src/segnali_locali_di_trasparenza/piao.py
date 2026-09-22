@@ -220,7 +220,7 @@ def fetch_publications_for_ipa(
     *,
     session: requests.Session | None = None,
     timeout: float = 20,
-    delay_seconds: float = 0.15,
+    delay_seconds: float = 0.50,
     max_pages: int = 100,
 ) -> tuple[list[dict[str, Any]], int]:
     ipa_code = str(ipa_code or "").strip()
@@ -284,7 +284,7 @@ def fetch_public_catalogue(
     *,
     session: requests.Session | None = None,
     timeout: float = 20,
-    delay_seconds: float = 0.15,
+    delay_seconds: float = 1.00,
     max_pages: int = 10000,
     keep_ipa_codes: set[str] | None = None,
     workers: int = 1,
