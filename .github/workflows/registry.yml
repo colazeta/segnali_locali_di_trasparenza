@@ -65,6 +65,16 @@ jobs:
       - name: Build registry from official sources
         run: python scripts/build_municipality_registry.py
 
+      - name: Probe SITUAS municipality population
+        run: python scripts/probe_population_source.py
+
+      - name: Upload population probe
+        uses: actions/upload-artifact@v4
+        with:
+          name: population-probe
+          path: data/probes/situas_population_probe.json
+          retention-days: 7
+
       - name: Upload registry snapshot
         uses: actions/upload-artifact@v4
         with:
