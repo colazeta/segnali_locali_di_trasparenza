@@ -180,7 +180,7 @@ def main() -> None:
         headers={"User-Agent": "Mozilla/5.0 segnali-locali-di-trasparenza/0.1"},
     )
     sample_response.raise_for_status()
-    with ZipFile(BytesIO(sample_response.content)) as archive:
+    with zipfile.ZipFile(io.BytesIO(sample_response.content)) as archive:
         sample_names = archive.namelist()
         sample_previews = {}
         for name in sample_names[:5]:
