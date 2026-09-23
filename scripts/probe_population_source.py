@@ -170,6 +170,25 @@ def main() -> None:
         ["istat_code", "name", "region_name", "supra_name"]
     ]
 
+    sample_href = next(
+        value for value in downloadish if "POSAS_2026_it_079_" in value
+    )
+    sample_url = requests.compat.urljoin(POSAS_PAGE, sample_href)
+    sample_response = requests.get(
+        sample_url,
+        timeout=90,
+        headers={"User-Agent": "Mozilla/5.0 segnali-locali-di-trasparenza/0.1"},
+    )
+    sample_response.raise_for_status()
+    with ZipFile(BytesIO(sample_response.content)) as archive:
+        sample_names = archive.namelist()
+        sample_previews = {}
+        for name in sample_names[:5]:
+            if name.endswith("/"):
+                continue
+            raw = archive.read(name)
+            sample_previews[name] = raw[:4000].decode("utf-8", errors="replace")
+
     result = {
         "situas_source_url": URL,
         "situas_rows": len(rows),
