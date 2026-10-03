@@ -182,3 +182,9 @@ piao_observation_history
 ```
 
 This will answer when the monitor first observed a PIAO without misrepresenting that timestamp as the official historical publication date.
+
+## Longitudinal evidence
+
+Accepted releases include the cumulative observation ledger described in
+[PIAO history](PIAO_HISTORY.md). Observation dates never populate
+`portal_publication_date`. Historical identities and disappearance events are retained.
