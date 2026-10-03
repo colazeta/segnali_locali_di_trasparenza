@@ -1,6 +1,14 @@
 # Portale PIAO public source
 
-Verified on 20 September 2026.
+Initially verified on 20 September 2026; bounded live recheck on 3 October 2026.
+
+The 3 October first/last-page checks returned a catalogue total of 39,900 and six
+records per sampled page. The sampled record/content fields remain as listed
+below. The official public frontend bundle references `/api/administrations`,
+`/api/piao` and `/api/helpdesk`; no `publicationDate`, `publishedAt` or `createdAt`
+field was found in that bundle. This does not establish that no other authoritative
+source exists. Issue #7 remains open. Observation history is implemented in
+accepted releases; see [history](PIAO_HISTORY.md).
 
 ## Official public catalogue
 

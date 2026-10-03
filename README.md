@@ -2,6 +2,20 @@
 
 Monitor nazionale dei **PIAO pubblicati dai comuni italiani** sul Portale PIAO del Dipartimento della Funzione Pubblica.
 
+## Stato operativo verificato — 3 ottobre 2026
+
+Il registry recuperato dal run del 28 settembre contiene 7.894 comuni e codici
+ISTAT/IPA univoci. Non risultano ancora release di snapshot accettati. I tre run
+nazionali presenti nella cronologia recente sono falliti; quello del 28 settembre
+ha correttamente respinto variazioni del catalogo durante la raccolta. Il sito
+pubblico all'indirizzo GitHub Pages del progetto restituisce attualmente 404.
+
+Sono implementati controlli rafforzati, rigetto anticipato delle variazioni,
+archiviazione prima del deployment e storico cumulativo delle osservazioni.
+Il prossimo run nazionale deve ancora validarli da sorgente a release e sito.
+I numeri del 20 settembre riportati sotto sono un benchmark storico documentato,
+non uno snapshot nazionale corrente certificato da una release persistente.
+
 ## Perimetro corrente
 
 In questa fase il progetto monitora **una sola cosa**:
@@ -39,7 +53,7 @@ La pipeline produttiva acquisisce **l'intero catalogo nazionale pagina per pagin
 
 Il lookup `GET /api/piao?ipaCode=<CODICE_IPA>&page=<N>` resta disponibile soltanto per diagnostica e validazione. Il parametro `ipaCode` non viene trattato come filtro esatto lato server: il Codice IPA restituito nel record viene sempre ricontrollato localmente.
 
-## Snapshot nazionale validato iniziale — 20 settembre 2026
+## Benchmark storico iniziale — 20 settembre 2026
 
 La validazione iniziale della pipeline bulk ha acquisito:
 

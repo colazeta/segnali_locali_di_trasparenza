@@ -159,4 +159,4 @@ Per-IPA queries are retained for:
 - investigating mismatches;
 - validating changes to the bulk collector.
 
-A future longitudinal layer may persist `first_observed_at` and `last_observed_at` for each deterministic PIAO publication id.
+Accepted releases now preserve cumulative `first_observed_at` and `last_observed_at` history for each deterministic PIAO publication id, together with change and disappearance events. See [observation history](PIAO_HISTORY.md). History integration is implemented and tested; the first accepted production release is still required for end-to-end validation.
