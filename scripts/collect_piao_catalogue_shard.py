@@ -62,6 +62,7 @@ def main() -> None:
     parser.add_argument("--output-dir", default="data/piao-bulk-shards")
     parser.add_argument("--shard-index", type=int, required=True)
     parser.add_argument("--shard-count", type=int, required=True)
+    parser.add_argument("--catalogue-baseline")
     parser.add_argument("--delay", type=float, default=1.00)
     parser.add_argument("--timeout", type=float, default=20)
     parser.add_argument("--retries", type=int, default=2)
@@ -93,14 +94,22 @@ def main() -> None:
     if page_size <= 0:
         raise RuntimeError("PIAO catalogue reported a non-positive page size")
 
+    if args.catalogue_baseline:
+        baseline = json.loads(Path(args.catalogue_baseline).read_text(encoding="utf-8"))
+        if (advertised_total, page_size) != (baseline["total"], baseline["page_size"]):
+            raise RuntimeError("Catalogue changed since workflow baseline; snapshot rejected")
+
     total_pages = math.ceil(advertised_total / page_size)
     pages = list(range(args.shard_index, total_pages, args.shard_count))
-    retrieved_at = datetime.now(UTC).isoformat()
+    collection_started_at = datetime.now(UTC).isoformat()
 
     output_dir = Path(args.output_dir)
     index_path = output_dir / f"catalogue-index-{args.shard_index:02d}.csv"
     publications_path = output_dir / f"publications-{args.shard_index:02d}.csv"
     manifest_path = output_dir / f"manifest-{args.shard_index:02d}.json"
+
+    if any(path.exists() for path in (index_path, publications_path, manifest_path)):
+        raise RuntimeError("Shard output already exists; use a fresh output directory")
 
     publication_fields: list[str] | None = None
     page_totals: set[int] = set()
@@ -119,6 +128,15 @@ def main() -> None:
                 page,
                 session=session,
                 timeout=args.timeout,
+            )
+
+        retrieved_at = datetime.now(UTC).isoformat()
+        expected_rows = min(page_size, advertised_total - page * page_size)
+        if total != advertised_total or len(records) != expected_rows:
+            raise RuntimeError(
+                f"Catalogue drift on page {page}: total={total}, "
+                f"expected_total={advertised_total}, rows={len(records)}, "
+                f"expected_rows={expected_rows}; snapshot rejected"
             )
 
         page_totals.add(total)
@@ -181,6 +199,7 @@ def main() -> None:
 
     manifest = {
         "generated_at": datetime.now(UTC).isoformat(),
+        "collection_started_at": collection_started_at,
         "shard_index": args.shard_index,
         "shard_count": args.shard_count,
         "advertised_total_at_start": advertised_total,

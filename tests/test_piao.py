@@ -251,3 +251,16 @@ def test_per_ipa_lookup_rejects_prefix_matches() -> None:
     assert total == 2
     assert len(records) == 1
     assert records[0]["administrationIpaCode"] == "c_b9"
+
+
+def test_api_schema_drift_is_not_silently_discarded():
+    import pytest
+    from segnali_locali_di_trasparenza.piao import PiaoApiError, fetch_catalogue_page
+
+    session = FakeSession()
+    session.pages[0]["result"][0]["list"] = [None]
+    with pytest.raises(PiaoApiError, match="non-object"):
+        fetch_catalogue_page(0, session=session)
+    session.pages[0]["result"][0]["list"] = [{"years": "Anno 2026-2028"}]
+    with pytest.raises(PiaoApiError, match="incompatible schema"):
+        fetch_catalogue_page(0, session=session)

@@ -198,3 +198,36 @@ Once catalogue/per-IPA parity is validated:
 - derived municipality status is regenerated from the complete observed corpus;
 - later incremental checks may focus on municipalities still missing the target
   period, without changing the canonical weekly snapshot.
+
+## Acceptance and rejection evidence
+
+The bulk consolidator writes `catalogue_qa.json` before accepting or rejecting a
+structurally readable collection. The workflow uploads this report even when
+consolidation fails. Checks cover stable totals, shard assignments, every page's
+exact positions (including the short final page), unique full-record fingerprints
+and publication identifiers, the exact municipal projection of the catalogue,
+and ISTAT/IPA attribution. Duplicate publication identifiers are rejected rather
+than silently removed. The default municipality-universe acceptance count is
+7,894; a source change requires an investigated, explicit configuration update.
+
+Collectors reject changed totals or unexpected page lengths immediately. A shard
+failure cancels remaining matrix work; completeness requirements remain unchanged.
+Existing shard output is rejected to prevent accidental append-on-rerun corruption.
+The catalogue index is included in accepted snapshots, and the manifest hashes
+that index and the registry. Each publication's `retrieved_at` is its page retrieval
+time, rather than the start of the entire shard.
+
+The 28 September 2026 run (36416988136) was correctly rejected after all 40 shards
+finished: advertised totals ranged from 39,832 to 39,835, with 6,639–6,640 pages.
+Stable totals are necessary, but cannot guarantee a transactionally frozen source:
+a same-total replacement can still evade count checks. Fingerprints and identity
+checks catch duplicate-page drift, but the API exposes no snapshot token.
+
+Accepted releases include the registry and catalogue index. Re-running an existing
+release tag refuses to overwrite it. Site deployment depends on successful persistent
+archiving, so a published site cannot precede its archived evidence.
+
+The registry job pins catalogue pagination metadata once for the entire run.
+Every shard compares its initial response with this shared baseline before
+collecting any further pages. This detects between-shard changes early, as well
+as changes within a shard, without increasing concurrency or removing delays.
