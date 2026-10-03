@@ -188,3 +188,11 @@ This will answer when the monitor first observed a PIAO without misrepresenting 
 Accepted releases include the cumulative observation ledger described in
 [PIAO history](PIAO_HISTORY.md). Observation dates never populate
 `portal_publication_date`. Historical identities and disappearance events are retained.
+
+## Downstream status coverage
+
+Coverage analytics and the site require one recognised lookup status for every
+registry ISTAT identity, with no missing, duplicate or unexpected identities.
+A missing CSV row is rejected before a left join: it cannot become
+`no_piao_observed` through empty/NaN boolean conversion. Explicit `error` rows
+remain `lookup_error`.
