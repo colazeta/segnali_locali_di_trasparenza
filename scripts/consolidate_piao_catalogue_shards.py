@@ -4,11 +4,12 @@ import argparse
 import glob
 import hashlib
 import json
-import math
 from datetime import UTC, datetime
 from pathlib import Path
 
 import pandas as pd
+
+from segnali_locali_di_trasparenza.catalogue_qa import require_accepted, validate_catalogue
 
 
 STATUS_COLUMNS = [
@@ -152,6 +153,7 @@ def main() -> None:
     )
     parser.add_argument("--output-dir", default="data/piao-bulk-national")
     parser.add_argument("--expected-shards", type=int, default=40)
+    parser.add_argument("--expected-municipalities", type=int, default=7894)
     parser.add_argument("--target-start-year", type=int, default=2026)
     args = parser.parse_args()
 
@@ -167,84 +169,31 @@ def main() -> None:
         json.loads(path.read_text(encoding="utf-8")) for path in manifest_paths
     ]
 
-    shard_indexes = sorted(int(item["shard_index"]) for item in manifests)
-    if shard_indexes != list(range(args.expected_shards)):
-        raise RuntimeError(f"Shard index coverage mismatch: {shard_indexes}")
-
-    advertised_totals = {
-        int(item["advertised_total_at_start"]) for item in manifests
-    }
-    page_sizes = {int(item["page_size_at_start"]) for item in manifests}
-    total_pages_values = {int(item["total_pages"]) for item in manifests}
-    observed_totals = {
-        int(value)
-        for item in manifests
-        for value in item.get("observed_totals", [])
-    }
-
-    if len(advertised_totals) != 1 or len(page_sizes) != 1 or len(total_pages_values) != 1:
-        raise RuntimeError(
-            "Catalogue metadata drift across shards: "
-            f"totals={sorted(advertised_totals)}, "
-            f"page_sizes={sorted(page_sizes)}, pages={sorted(total_pages_values)}"
-        )
-    if observed_totals != advertised_totals:
-        raise RuntimeError(
-            "Catalogue total changed while collecting: "
-            f"start={sorted(advertised_totals)}, observed={sorted(observed_totals)}"
-        )
-
-    advertised_total = next(iter(advertised_totals))
-    page_size = next(iter(page_sizes))
-    total_pages = next(iter(total_pages_values))
-    expected_total_pages = math.ceil(advertised_total / page_size)
-    if total_pages != expected_total_pages:
-        raise RuntimeError(
-            f"Total page calculation mismatch: {total_pages} != {expected_total_pages}"
-        )
-
     index = read_many(args.index_glob)
-    if index.empty:
-        raise RuntimeError("No catalogue index rows collected")
-    index["page"] = pd.to_numeric(index["page"], errors="raise").astype(int)
-    index["position"] = pd.to_numeric(index["position"], errors="raise").astype(int)
-
-    pages = sorted(index["page"].unique().tolist())
-    expected_pages = list(range(total_pages))
-    missing_pages = sorted(set(expected_pages) - set(pages))
-    unexpected_pages = sorted(set(pages) - set(expected_pages))
-    duplicate_positions = int(index.duplicated(["page", "position"]).sum())
-    duplicate_fingerprints = int(index["record_fingerprint"].duplicated().sum())
-
-    if missing_pages or unexpected_pages or duplicate_positions:
-        raise RuntimeError(
-            "Catalogue page coverage failed: "
-            f"missing_pages={len(missing_pages)}, "
-            f"unexpected_pages={len(unexpected_pages)}, "
-            f"duplicate_positions={duplicate_positions}"
-        )
-    if len(index) != advertised_total:
-        raise RuntimeError(
-            f"Catalogue row count mismatch: {len(index)} != {advertised_total}"
-        )
-    if duplicate_fingerprints:
-        raise RuntimeError(
-            f"Catalogue contains {duplicate_fingerprints} duplicate record fingerprints; "
-            "rerun to rule out pagination drift before accepting the snapshot."
-        )
-
     publications = read_many(args.publications_glob)
     if publications.empty:
         raise RuntimeError("No municipal PIAO publications selected from catalogue")
-
     publications["istat_code"] = publications["istat_code"].astype(str).str.zfill(6)
-    logical_duplicates = int(
-        publications["piao_publication_id"].duplicated(keep=False).sum()
+    report = validate_catalogue(
+        registry, index, publications, manifests, expected_shards=args.expected_shards
     )
-    if logical_duplicates:
-        publications = publications.drop_duplicates(
-            "piao_publication_id", keep="last"
-        )
+    report["checks"].append({
+        "check": "municipality_universe_size",
+        "passed": len(registry) == args.expected_municipalities,
+        "expected": args.expected_municipalities, "actual": len(registry),
+    })
+    report["accepted"] = all(c["passed"] for c in report["checks"])
+    output_dir = Path(args.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "catalogue_qa.json").write_text(
+        json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    require_accepted(report)
+    advertised_total = int(manifests[0]["advertised_total_at_start"])
+    page_size = int(manifests[0]["page_size_at_start"])
+    total_pages = int(manifests[0]["total_pages"])
+    missing_pages, unexpected_pages = [], []
+    duplicate_positions = duplicate_fingerprints = logical_duplicates = 0
 
     retrieved_at = max(
         str(item.get("generated_at") or "") for item in manifests
@@ -270,6 +219,7 @@ def main() -> None:
     publications_jsonl_path = output_dir / "piao_publications.jsonl"
     manifest_path = output_dir / "manifest.json"
 
+    index.to_csv(output_dir / "catalogue_index.csv", index=False)
     status.sort_values("istat_code").to_csv(status_path, index=False)
     publications = publications.sort_values(
         ["istat_code", "reference_start_year", "version", "approval_date"],
@@ -286,6 +236,11 @@ def main() -> None:
     manifest = {
         "generated_at": datetime.now(UTC).isoformat(),
         "target_start_year": args.target_start_year,
+        "collection_started_at": min(
+            str(m.get("collection_started_at") or m["generated_at"]) for m in manifests
+        ),
+        "collection_finished_at": retrieved_at,
+        "registry_sha256": sha256_file(Path(args.registry)),
         "catalogue_advertised_total": advertised_total,
         "catalogue_page_size": page_size,
         "catalogue_total_pages": total_pages,
@@ -308,6 +263,7 @@ def main() -> None:
             "duplicate_record_fingerprints": duplicate_fingerprints,
         },
         "outputs": {
+            "catalogue_index_sha256": sha256_file(output_dir / "catalogue_index.csv"),
             "status_csv": str(status_path),
             "status_csv_sha256": sha256_file(status_path),
             "publications_csv": str(publications_path),

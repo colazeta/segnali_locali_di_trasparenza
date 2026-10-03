@@ -193,8 +193,15 @@ def _request_page(
 
     total = int(container.get("total") or 0)
     count = int(container.get("count") or len(records))
-    clean_records = [record for record in records if isinstance(record, dict)]
-    return clean_records, total, count
+    if any(not isinstance(record, dict) for record in records):
+        raise PiaoApiError("PIAO public API list contains a non-object record")
+    for record in records:
+        if (not isinstance(record.get("administrationIpaCode"), str)
+                or not record["administrationIpaCode"].strip()
+                or not isinstance(record.get("years"), str)
+                or not isinstance(record.get("content"), dict)):
+            raise PiaoApiError("PIAO public API record has an incompatible schema")
+    return records, total, count
 
 
 def fetch_catalogue_page(
