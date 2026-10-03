@@ -157,6 +157,7 @@ La scansione per-IPA non è la pipeline produttiva.
 
 - [PIAO source and API](docs/PIAO_SOURCE.md)
 - [PIAO collection architecture](docs/PIAO_COLLECTION_ARCHITECTURE.md)
+- [Observation history](docs/PIAO_HISTORY.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Data model](docs/DATA_MODEL.md)
 - [Municipality lineage](docs/LINEAGE.md)
