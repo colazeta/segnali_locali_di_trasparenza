@@ -6,6 +6,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from segnali_locali_di_trasparenza.status_qa import validate_status_coverage
+
 
 def as_bool(series: pd.Series) -> pd.Series:
     return series.astype(str).str.casefold().isin({"true", "1", "yes", "sì", "si"})
@@ -23,6 +25,7 @@ def main() -> None:
 
     registry["istat_code"] = registry["istat_code"].astype(str).str.zfill(6)
     status["istat_code"] = status["istat_code"].astype(str).str.zfill(6)
+    validate_status_coverage(registry, status)
 
     legacy = {
         "current_reference_year": "target_start_year",

@@ -10,6 +10,8 @@ from urllib.parse import urlparse
 
 import pandas as pd
 
+from segnali_locali_di_trasparenza.status_qa import validate_status_coverage
+
 from segnali_locali_di_trasparenza.timeliness import (
     build_timeliness_table,
     national_timeliness_statistics,
@@ -795,6 +797,7 @@ def build_site(
 
     registry["istat_code"] = registry["istat_code"].astype(str).str.zfill(6)
     status["istat_code"] = status["istat_code"].astype(str).str.zfill(6)
+    validate_status_coverage(registry, status)
     publications["istat_code"] = publications["istat_code"].astype(str).str.zfill(6)
 
     target_year_values = {
